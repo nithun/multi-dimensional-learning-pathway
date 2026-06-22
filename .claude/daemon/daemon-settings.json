@@ -1,0 +1,36 @@
+{
+  "_doc": "Scoped permission sandbox for the unattended curator/autopilot daemon (B-014). Passed to the headless run via --settings. Replaces --dangerously-skip-permissions: the daemon can edit framework files + use git, but is HARD-DENIED from editing source code, reaching the network, pushing, or running destructive shell. deny rules take precedence over allow + the acceptEdits mode, so source edits are blocked even though framework edits auto-accept.",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git restore:*)",
+      "Bash(bash scripts/triage.sh:*)",
+      "Task"
+    ],
+    "deny": [
+      "Edit(app/**)",
+      "Write(app/**)",
+      "Edit(platform/**)",
+      "Write(platform/**)",
+      "Edit(tests/**)",
+      "Write(tests/**)",
+      "Edit(ci/**)",
+      "Write(ci/**)",
+      "WebFetch",
+      "WebSearch",
+      "Bash(git push:*)",
+      "Bash(rm:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(sudo:*)",
+      "Bash(npm:*)",
+      "Bash(pip:*)",
+      "Bash(launchctl:*)"
+    ]
+  }
+}

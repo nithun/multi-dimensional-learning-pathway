@@ -1,0 +1,10 @@
+{
+  "_doc": "Safety state machine for self-edits. A non-open lane makes edits in that lane proposals, not direct writes. Only the user reopens a closed lane.",
+  "mode": "aggressive",
+  "thresholds": { "revert_or_ineffective_pause_after_n": 2, "rolling_window_edits": 5 },
+  "skills": { "status": "open", "recent_outcomes": [] },
+  "agents": { "status": "open", "recent_outcomes": [] },
+  "memory": { "status": "open", "recent_outcomes": [] },
+  "last_run": null,
+  "last_updated": "unset"
+}

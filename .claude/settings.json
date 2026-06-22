@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Cowork framework settings. SessionStart auto-loads the evolution state + latest curator digest into context, so you're updated automatically at the start of every session (read-only, safe). The autonomous background curator (SessionEnd hook + launchd) is NOT wired here by default because it runs Claude headless with relaxed permissions — see ACTIVATING-THE-DAEMON.md to enable it explicitly.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/orient.sh\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/reflect-hook.sh\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

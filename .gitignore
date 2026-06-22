@@ -1,0 +1,36 @@
+# Local, machine-specific Claude Code settings (permissions, etc.)
+.claude/settings.local.json
+
+# Curator daemon runtime state (machine-local, not shared)
+.claude/daemon/.lock
+.claude/daemon/watermark
+.claude/daemon/DISABLED
+.claude/daemon/runs/
+.claude/daemon/autopilots/
+.claude/daemon/*.log
+
+# OS / editor noise
+.DS_Store
+*.swp
+*~
+
+# Secrets — never commit GCP creds
+*.key
+*.pem
+service-account*.json
+**/credentials*.json
+.env
+.env.*
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Derived/machine-local triage state (recomputed every interaction)
+.claude/memory/triage.json
+
+# Test / dev env
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
