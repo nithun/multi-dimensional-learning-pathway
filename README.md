@@ -1,115 +1,83 @@
-# Turing Agents
+# Multi-Dimensional Learning Pathway
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**A self-evolving, team-organized agent framework for Claude Cowork + Claude Code.**
+**An AI/agent research project exploring multi-dimensional learning pathways — built on a self-evolving agent framework.**
 
-Drop it into a project and it does two things at once:
-
-1. **Self-evolves** — it learns your project, builds its own agents and skills as the work demands them, and gets better from every interaction. It starts almost empty and specializes itself.
-2. **Runs agents as a team** — agents are teammates you assign work to, with a task lifecycle, a squad leader that delegates, autopilots (recurring routines), and a per-agent audit log.
-
-You stay focused on building. A background **curator** watches every session and tends the framework; you never trigger profiling, reflection, or evolution by hand. MIT-licensed. Generalized from a proven in-production setup (TAP LMS) and the managed-agents model of [Multica AI](https://github.com/multica-ai/multica).
+> **Status: early-stage / bootstrapping.** The research direction below is the framing, not a finished result. Specifics (methods, models, findings) firm up as the work happens, and this README grows with them. The repo currently holds the agent scaffold the research runs on — project-specific code and write-ups land here as they're produced.
 
 ---
 
-## Quick start
+## What this is
+
+A research project investigating **multi-dimensional learning pathways** — how learning can be modeled, navigated, and adapted across several dimensions at once (rather than a single linear track) — using AI agents as both the subject and the tooling.
+
+It's deliberately exploratory. Rather than committing up front to one architecture, the project uses a **self-evolving agent layer** that profiles the work, records what's learned, and grows its own specialist agents and playbooks as the research takes shape. The substrate is meant to compound: every experiment leaves the toolchain a little sharper for the next one.
+
+## Research focus
+
+Open questions this project is organized around (these will be refined as the work proceeds):
+
+- **Dimensions** — what are the meaningful axes of a learning pathway (e.g. skill, depth, modality, prerequisite structure, time), and how do they interact?
+- **Navigation** — how does an agent (or a learner) move through a multi-dimensional space without collapsing it back into a single line?
+- **Adaptation** — how does a pathway re-shape itself in response to progress, gaps, and feedback?
+- **Agents as method** — where do autonomous agents help (mapping the space, proposing routes, evaluating progress), and where do they get in the way?
+
+Findings, experiments, and design notes will be written up under `docs/` as they're produced.
+
+## Built on Turing Agents
+
+The agent layer in this repo is the **Turing Agents** framework (v0.2.0) — a generic, self-evolving Claude agent scaffold for Claude Cowork + Claude Code. It starts almost empty and grows the specific agents, skills, and memory this project needs from real work.
+
+In short:
+
+- **It learns the project.** A `curator` watches every working session, profiles the repo, and records lessons — you don't trigger profiling or evolution by hand.
+- **It runs agents as a team.** Agents are teammates you assign work to via a task board (`tasks/BOARD.md`), with a squad leader (`dispatcher`) that routes work to specialists.
+- **Every self-edit is a git commit** (`evolve: …`), so anything the framework changes about itself can be reverted.
+
+If you're here to understand *how the agents work* rather than the research, start with:
+
+- [`CLAUDE.md`](CLAUDE.md) — the operating loop and protocols (read first).
+- [`WORKFLOW.md`](WORKFLOW.md) — task-type → path map.
+- [`EVOLUTION-LOG.md`](EVOLUTION-LOG.md) — plain-language log of everything the framework has learned.
+
+The framework is MIT-licensed and generalized from a proven in-production setup (TAP LMS) and the managed-agents model of [Multica AI](https://github.com/multica-ai/multica).
+
+## Repository layout
+
+```
+CLAUDE.md                     the agent operating loop + protocols (read first)
+WORKFLOW.md                   task-type → path map
+.claude/
+  agents/*.md                 the self-evolving agent squad
+  memory/                     project profile, lessons, patterns, glossary, logs
+  squads.md                   squad registry (task type → teammate)
+  settings.json               SessionStart hook → loads framework state each session
+tasks/BOARD.md                the team kanban board (assign work to agents)
+autopilots/                   recurring routines (weekly retrospective, …)
+skills/                       on-demand playbooks (grown as needed)
+docs/                         research notes, design studies, evolution reports
+scripts/                      framework tooling (capture · orient · evolve · task · …)
+EVOLUTION-LOG.md              plain-language digest of what the framework learned
+```
+
+## Getting started
+
+This repo is already initialized — no template reset needed. To work on it:
 
 ```bash
-# 1. pull a release into a new project folder
-git clone <this-repo> my-project && cd my-project
-git checkout v0.2.0
+# clone
+git clone https://github.com/nithun/multi-dimensional-learning-pathway.git
+cd multi-dimensional-learning-pathway
 
-# 2. reset to a clean slate for YOUR project
-scripts/init-project.sh --yes
+# open a Claude Code / Cowork session in this folder and start working.
+# the framework auto-profiles on first real work and learns as you go.
 
-# 3. start building in a Claude Code / Cowork session here.
-#    The framework auto-profiles on first real work and learns as you go.
-
-# 4. (optional) always-on background evolution, even while you're away:
+# (optional) always-on background evolution, even while you're away:
 scripts/install.sh --daemon
 ```
 
-That's it. Open a session and work — `scout` profiles the project on first activity, the curator digests every session, and `EVOLUTION-LOG.md` + the SessionStart banner keep you posted.
-
-## How it works
-
-```
-   you build → every session is watched → curator digests + evolves the framework
-        ▲                                                         │
-        └─────────  sharper skills / new agents / lessons  ←──────┘
-                    (built by skill-smith / agent-smith / plugin-researcher)
-
-   project work → task board → dispatcher routes to the right teammate → done → skill harvested
-```
-
-## The agents (8)
-
-**Framework squad** (self-evolution) — led by `curator`:
-
-| Agent | Role |
-|---|---|
-| `curator` | Autonomous overseer: watches all sessions, runs profile→reflect→evolve, writes your digest |
-| `scout` | Profiles the project into `project-profile.md`; proposes first skills/agents |
-| `skill-smith` | Authors/refines `skills/<topic>/SKILL.md` playbooks |
-| `agent-smith` | Authors/refines `.claude/agents/<name>.md` specialists |
-| `plugin-researcher` | Finds needed plugins/MCP connectors online + in the registry; links them to agents |
-| `retrospective` | Evolution engine: extracts lessons, audits its own past edits |
-| `course-corrector` | On "we're going in the wrong direction" → questionnaire → corrective evolution |
-
-**Project squad** (the work) — led by `dispatcher`, which routes board tasks to specialists that `agent-smith` builds as your project's recurring task-types appear.
-
-## Layout
-
-```
-CLAUDE.md                     the loop + protocols (read first)
-WORKFLOW.md                   task-type → path map
-.claude/
-  settings.json               SessionStart hook → auto-loads evolution state each session
-  squads.md                   squad registry (task type → teammate)
-  agents/*.md                 the 8 agents (each with a protected INVARIANTS fence)
-  memory/
-    project-profile.md        what we know about THIS project (living)
-    lessons.md                append-and-supersede rules
-    patterns.md · glossary.md canonical idioms · project vocabulary
-    circuit-breaker.json      safety state machine (skills/agents/memory lanes)
-    interactions.jsonl        one line per meaningful interaction (learning substrate)
-    evolution-log.jsonl       every self-modification + audited outcome
-    audit.jsonl               per-teammate completed-work log
-  daemon/                     curator runtime: watermark, lock, logs (git-ignored)
-tasks/
-  BOARD.md                    the team kanban board (assign work to agents)
-  T-template.md               detailed-task template
-autopilots/                   recurring routines (weekly retrospective, …)
-skills/                       on-demand playbooks (empty until earned)
-docs/evolution/               run reports, proposals, backlog, design studies
-scripts/
-  capture · orient · evolve   reflect · banner · curator daemon runner
-  task · audit · autopilot     board · audit log · recurring routines
-  install · init-project       portable setup · fresh-project reset
-EVOLUTION-LOG.md              plain-language digest of everything the framework learned
-ACTIVATING-THE-DAEMON.md      how to turn on always-on background evolution
-```
-
-## Safety model
-
-- **Every self-edit is an atomic git commit** (`evolve: …`) → revert anything with `git revert`.
-- **Circuit-breaker** pauses a lane (skills/agents/memory) after repeated bad edits; only you reopen it. Set `"mode": "proposal-only"` in `circuit-breaker.json` to gate every change.
-- **INVARIANTS fences** in each agent are off-limits to all agents — `retrospective` can't even edit its own.
-- **The framework never edits your source code** — only its own files (`.claude/`, `skills/`, `docs/`, memory, the framework docs).
-- **The always-on daemon is opt-in** — it runs Claude headless with relaxed permissions, so you enable it explicitly (`scripts/install.sh --daemon`); pause anytime with `touch .claude/daemon/DISABLED`.
-
-## Steering it
-
-You usually type nothing — it's automatic. Your one lever: if the project or framework drifts, say **"we're going in the wrong direction"** → `course-corrector` hands you a questionnaire and fixes the framework from your answers.
-
-## Managing many projects
-
-A cross-project **control plane** (a `turing` CLI + an MCP extension + an autonomous fleet conductor) is in active development on the `main` branch — it lets you register and manage many Turing Agents projects from one place, as a Claude Cowork extension. It's intentionally **not** part of this framework tag (which is the per-project template you pull). Track it on `main`.
-
-## Requirements
-
-macOS (for the launchd daemon; the rest is portable), `git`, and the `claude` CLI (Claude Cowork / Claude Code). The always-on daemon needs `claude` on PATH. The framework itself is just Markdown + Bash; no other dependencies.
+Requirements: macOS (for the launchd daemon; the rest is portable), `git`, and the `claude` CLI (Claude Cowork / Claude Code). The framework itself is just Markdown + Bash — no other dependencies.
 
 ## License
 
