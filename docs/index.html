@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MDLP — Multi-Dimensional Learning Pathways</title>
+<meta name="description" content="An open-ended, probabilistic, verifier-grounded framework for self-improving agents. Generalizes learning-pathway inference from human learners to agents." />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css" />
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><span class="dot"></span> MDLP</a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="#tutorials">Tutorials</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#paper">Paper</a>
+      <a class="btn btn-ghost btn-sm" href="https://github.com/nithun/multi-dimensional-learning-pathway" target="_blank" rel="noopener">GitHub</a>
+      <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- HERO -->
+<section class="hero" style="border-bottom:1px solid var(--border)">
+  <div class="wrap">
+    <span class="tag">Self-improving agents · probabilistic learning pathways</span>
+    <h1>Agents that <span class="grad">learn the right thing next</span>.</h1>
+    <p class="lead">
+      MDLP is an open-ended, probabilistic, <b>verifier-grounded</b> framework for self-improving agents.
+      It models each learner as a posterior over a growing competence field, and selects every next
+      learning action to maximize <b>expected learning gain</b> — not immediate success — measured by a
+      real held-out verifier.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#install">Get started →</a>
+      <a class="btn btn-ghost" href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">Read the paper</a>
+    </div>
+  </div>
+</section>
+
+<!-- OVERVIEW -->
+<section id="overview">
+  <div class="wrap">
+    <h2>One control problem, two fields</h2>
+    <p class="sub">
+      Personalized-learning systems and self-improving agents both ask: from the learner's current
+      state, which next action most improves it? MDLP answers it probabilistically and openly — and the
+      "learner" can be a human student or a software agent.
+    </p>
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="k">probabilistic</div>
+        <h3>A real state model</h3>
+        <p>Competence is a Beta posterior per <em>skill × difficulty</em> — a dual mastery/drift posterior with decay and a minimum-sample floor. Not a deterministic label.</p>
+      </div>
+      <div class="card">
+        <div class="k">learning gain</div>
+        <h3>The corrected objective</h3>
+        <p>Greedy <code class="inline">argmax P(success)</code> picks the already-mastered action and learns nothing. MDLP maximizes <code class="inline">E[Δ competence]</code> — the learning-progress frontier.</p>
+      </div>
+      <div class="card">
+        <div class="k">verifier-grounded</div>
+        <h3>Measured, not assumed</h3>
+        <p>Every reward comes from a real verifier on <b>held-out</b> items (code execution, schema, task success). Skills without a reliable verifier stay out of the autonomous loop.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">
+      The schema stays <em>open</em> at the object level (skills, dimensions, edges grow from data) while
+      three meta-functions are committed. The loop runs as a Monte-Carlo search over a growing competence graph.
+    </p>
+
+    <div class="grid grid-3" style="margin-bottom:28px">
+      <div class="card"><div class="k">growth rule g</div><h3>Open schema</h3><p>New skills spawn from novel failure clusters (a CRP "new table"); merge, prune, and edge-decay are the inverses. No node enters the graph until it can be scored.</p></div>
+      <div class="card"><div class="k">validity v</div><h3>Soft reachability</h3><p>A skill's reachability is the product of P(prereq mastered) — compositional, so more mastery opens <em>more</em> futures. One wrong prereq dampens, never deletes.</p></div>
+      <div class="card"><div class="k">frontier policy π</div><h3>Learning-gain choice</h3><p>Thompson-sampled expected learning gain, a coverage floor so no skill is abandoned, and cost as a hard budget constraint.</p></div>
+    </div>
+
+    <div class="diagram" aria-label="The MDLP evolution loop">
+      <svg viewBox="0 0 920 150" xmlns="http://www.w3.org/2000/svg" role="img">
+        <title>The evolution loop: select, expand, evaluate, grow, backup, commit or rollback</title>
+        <defs>
+          <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2dd4bf"/></marker>
+        </defs>
+        <g font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#d7e0ea" text-anchor="middle">
+          <g>
+            <rect x="8"   y="50" width="120" height="48" rx="9" fill="#141b24" stroke="#2dd4bf"/><text x="68"  y="79">1 · select π</text>
+            <rect x="160" y="50" width="120" height="48" rx="9" fill="#141b24" stroke="#222c38"/><text x="220" y="79">2 · expand</text>
+            <rect x="312" y="50" width="140" height="48" rx="9" fill="#141b24" stroke="#222c38"/><text x="382" y="79">3 · evaluate</text>
+            <rect x="484" y="50" width="120" height="48" rx="9" fill="#141b24" stroke="#222c38"/><text x="544" y="79">4 · grow</text>
+            <rect x="636" y="50" width="120" height="48" rx="9" fill="#141b24" stroke="#222c38"/><text x="696" y="79">5 · backup</text>
+            <rect x="788" y="50" width="124" height="48" rx="9" fill="#141b24" stroke="#2dd4bf"/><text x="850" y="73">6 · commit</text><text x="850" y="89" font-size="11" fill="#8b97a6">/ rollback</text>
+          </g>
+          <g stroke="#2dd4bf" stroke-width="1.4" marker-end="url(#a)" fill="none">
+            <line x1="128" y1="74" x2="158" y2="74"/>
+            <line x1="280" y1="74" x2="310" y2="74"/>
+            <line x1="452" y1="74" x2="482" y2="74"/>
+            <line x1="604" y1="74" x2="634" y2="74"/>
+            <line x1="756" y1="74" x2="786" y2="74"/>
+            <path d="M850 98 C 850 132, 68 132, 68 100" stroke-dasharray="5 5"/>
+          </g>
+          <text x="460" y="146" fill="#5d6b7a" font-size="11" font-family="-apple-system, sans-serif">held-out verifier gates every commit · statistical + cumulative + generalization + safety</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="callout" style="margin-top:24px">
+      <b>Two principles</b> run through every component: <b>measurement independence</b> (decide on data the
+      learner never optimized against — held-out evals, counterfactual credit, cumulative baselines) and
+      <b>reversible openness</b> (every <code class="inline">add</code> has an inverse).
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="wrap">
+    <h2>Installation</h2>
+    <p class="sub">
+      The reference implementation is the <code class="inline">mdlp</code> Python package. The algorithm
+      depends only on store <em>ports</em>, so the substrate runs on the full 5-store hybrid
+      (PostgreSQL · MongoDB · Qdrant · Neo4j · Redis · S3/MinIO), brought up with Docker.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Prerequisites</h3>
+          <p>Python 3.10+ and Docker (for the five backing services). A GPU is only needed for the optional weight-axis (M2).</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Get the package &amp; install the full tier</h3>
+          <p>Clone the reference implementation and install the data-layer drivers. Core imports are pure-stdlib; backends are optional extras.</p>
+          <div class="code">
+            <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
+<pre><code class="language-bash">git clone https://github.com/nithun/turing-agents.git
+cd turing-agents/mdlp
+
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[full]"        # all 5 store drivers
+# or one role at a time:  pip install -e ".[postgres]" ".[redis]"</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Bring up the five stores</h3>
+          <p>Each store role maps to a service. Start them with Docker Compose, then point the config at localhost.</p>
+          <div class="code">
+            <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
+<pre><code class="language-bash">docker compose up -d            # postgres · mongo · qdrant · neo4j · redis · minio
+docker compose ps               # all healthy?</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Wire the stores in Python</h3>
+          <p>One call builds the whole hybrid; or mix tiers per role. Backends import lazily, so an unused driver need not be installed.</p>
+          <div class="code">
+            <div class="bar"><span class="label">python</span><button class="copy">Copy</button></div>
+<pre><code class="language-python">from mdlp.stores import build_stores
+from mdlp.stores.config import StoresConfig
+
+# the complete 5-store hybrid (localhost defaults)
+stores = build_stores(StoresConfig.full())
+
+# ...or mix backends per role
+stores = build_stores({
+    "truth":    "postgres://user@localhost/mdlp",
+    "state":    "mongodb://localhost:27017/mdlp",
+    "vector":   "qdrant://localhost:6333",
+    "graph":    "neo4j://localhost:7687",
+    "cache":    "redis://localhost:6379/0",
+    "artifact": "s3://mdlp-artifacts",
+})
+
+stores.close()</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Verify</h3>
+          <p>The spine and adapter logic are unit-tested with no databases; the live tier is checked behind a gated integration run.</p>
+          <div class="code">
+            <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
+<pre><code class="language-bash">PYTHONPATH=. pytest                                  # hermetic spine + adapter tests
+docker compose up -d &amp;&amp; MDLP_INTEGRATION=1 pytest tests/integration   # full tier (live)</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>Precondition:</b> the loop is only as good as its verifier. MDLP is built for domains with a cheap,
+      reliable check (code execution, schema, task success). Where the only signal is a model judging itself,
+      the admission gate keeps that skill out of autonomous learning — by design.
+    </div>
+  </div>
+</section>
+
+<!-- TUTORIALS -->
+<section id="tutorials">
+  <div class="wrap">
+    <h2>Tutorials</h2>
+    <p class="sub">Common things you'll do once the stores are up.</p>
+
+    <h3>Link a project's agents to the learning loop</h3>
+    <p class="muted">Discover every agent, ingest the framework's logs, and print per-agent competence.</p>
+    <div class="code">
+      <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
+<pre><code class="language-bash">python -m mdlp.cli agents .                 # list every linkable agent
+python -m mdlp.cli link . --report         # ingest logs → per-agent competence</code></pre>
+    </div>
+
+    <h3 style="margin-top:28px">Record an evaluation and read back competence</h3>
+    <p class="muted">Held-out outcomes drive the posterior; the truth store stays canonical and the rest are rebuildable projections.</p>
+    <div class="code">
+      <div class="bar"><span class="label">python</span><button class="copy">Copy</button></div>
+<pre><code class="language-python">from mdlp.stores.schemas import EvalResult
+import time
+
+stores.truth.record_eval(EvalResult(
+    id="e1", ts=time.time(), skill="parse-json", difficulty="hard",
+    split="held_out", n_pass=9, n_total=10, verifier="pytest",
+))
+
+# project competence from truth (any backend; replays evals into the state store)
+from mdlp.stores.rebuild import rebuild_state
+rebuild_state(stores.truth, stores.state)
+cell = stores.state.get("parse-json", "hard")
+print(cell.mastery.mean, "±", cell.mastery.var ** 0.5)</code></pre>
+    </div>
+
+    <h3 style="margin-top:28px">Migrate or rebuild a projection</h3>
+    <p class="muted">Because truth is canonical, you can repoint any store at a fresh backend and replay.</p>
+    <div class="code">
+      <div class="bar"><span class="label">python</span><button class="copy">Copy</button></div>
+<pre><code class="language-python">from mdlp.stores.rebuild import rebuild_all
+rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="wrap">
+    <h2>Architecture</h2>
+    <p class="sub">A hybrid 5-store data layer split by timescale — a hot <em>act</em> path (milliseconds) and a cold <em>learn</em> path (async). The SQL truth store is canonical; the rest are rebuildable projections.</p>
+
+    <table>
+      <thead><tr><th>Role</th><th>Backend</th><th>Path</th><th>Serves</th></tr></thead>
+      <tbody>
+        <tr><td><code>TruthStore</code></td><td>PostgreSQL</td><td>cold</td><td>canonical event log, eval results, lineage</td></tr>
+        <tr><td><code>StateStore</code></td><td>MongoDB</td><td>warm</td><td>the growing competence field (schemaless)</td></tr>
+        <tr><td><code>VectorStore</code></td><td>Qdrant</td><td>hot</td><td>embeddings · recall · failure clustering</td></tr>
+        <tr><td><code>GraphStore</code></td><td>Neo4j</td><td>hot</td><td>pathway graph · prereqs · MCTS tree</td></tr>
+        <tr><td><code>CacheStore</code></td><td>Redis</td><td>hot</td><td>materialized frontier · "act fast" layer</td></tr>
+        <tr><td><code>ArtifactStore</code></td><td>S3 / MinIO</td><td>cold</td><td>checkpoints · datasets · model registry</td></tr>
+      </tbody>
+    </table>
+
+    <p class="muted" style="margin-top:20px">The learning spine is store-independent and unit-tested through the ports:</p>
+    <div class="grid grid-3">
+      <div class="card"><div class="k">state</div><p>dual Beta posteriors, <code class="inline">n_min</code> floor, <code class="inline">significant()</code>, learning-progress-as-slope</p></div>
+      <div class="card"><div class="k">eval</div><p>verifier (output ∧ shape ∧ counterfactual), held-out/public split, reliability-gated admission</p></div>
+      <div class="card"><div class="k">decision</div><p>learning-gain π — Thompson over LP, coverage floor, hard cost constraint</p></div>
+      <div class="card"><div class="k">memory</div><p>skill library — held-out-clean retrieval, counterfactual credit</p></div>
+      <div class="card"><div class="k">loop</div><p>composite commit/rollback gate + circuit breaker</p></div>
+      <div class="card"><div class="k">growth</div><p>provision-coupled schema growth + merge / prune / edge-decay</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- PAPER -->
+<section id="paper">
+  <div class="wrap">
+    <h2>Paper &amp; design</h2>
+    <p class="sub">The full research chain — every prior-art claim primary-source verified, the design adversarially hardened.</p>
+    <div class="grid grid-2">
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">The paper →</a></h3><p>Method, related work, and a pre-registered evaluation protocol (baselines, ablations, metrics).</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/REPORT-self-learning-agents.md" target="_blank" rel="noopener">Feasibility report →</a></h3><p>The go/no-go, the two-axis (memory + weight) analysis, and the evidence base.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.2-pathway-learner.md" target="_blank" rel="noopener">Algorithm v0.2 →</a></h3><p>The hardened spec: the gate primitive, growth provisioning, soft reachability, two-stage promotion.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.1-redteam.md" target="_blank" rel="noopener">Red-team →</a></h3><p>~40 findings → 8 root causes; the adversarial pass that produced the hardened design.</p></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MDLP — Multi-Dimensional Learning Pathways · MIT</span>
+    <span>Built from research → algorithm → red-team → v0.2 → paper.</span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>
