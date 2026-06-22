@@ -32,7 +32,8 @@ mkdir -p "$(dirname "$LOG")"
 touch "$LOG"
 
 # next id: IX-NNN, zero-padded to 3
-COUNT="$(grep -c '' "$LOG" 2>/dev/null || echo 0)"
+COUNT="$(wc -l < "$LOG" 2>/dev/null || echo 0)"
+COUNT="${COUNT//[^0-9]/}"; COUNT="${COUNT:-0}"
 NEXT=$((COUNT + 1))
 ID="$(printf 'IX-%03d' "$NEXT")"
 DATE="$(date +%Y-%m-%d)"
