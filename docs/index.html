@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>MDLP — Multi-Dimensional Learning Pathways</title>
-<meta name="description" content="An open-ended, probabilistic, verifier-grounded framework for self-improving agents. Generalizes learning-pathway inference from human learners to agents." />
+<meta name="description" content="An open-ended, probabilistic, verifier-grounded framework for self-improving agents — and human learners. One decision core: pick the next action by information gain, on a calibrated belief, gated by a trustworthy verifier." />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css" />
 <link rel="stylesheet" href="assets/style.css" />
@@ -16,9 +16,10 @@
     <a class="brand" href="#top"><span class="dot"></span> MDLP</a>
     <nav class="nav-links">
       <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#learners">Learners</a>
+      <a href="#gate">Review gate</a>
       <a href="#install">Install</a>
-      <a href="#tutorials">Tutorials</a>
-      <a href="#architecture">Architecture</a>
       <a href="#paper">Paper</a>
       <a class="btn btn-ghost btn-sm" href="https://github.com/nithun/multi-dimensional-learning-pathway" target="_blank" rel="noopener">GitHub</a>
       <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
@@ -31,16 +32,16 @@
 <!-- HERO -->
 <section class="hero" style="border-bottom:1px solid var(--border)">
   <div class="wrap">
-    <span class="tag">Self-improving agents · probabilistic learning pathways</span>
-    <h1>Agents that <span class="grad">learn the right thing next</span>.</h1>
+    <span class="tag">Self-improving agents · personalized learning · one probabilistic core</span>
+    <h1>Learners that <span class="grad">learn the right thing next</span>.</h1>
     <p class="lead">
-      MDLP is an open-ended, probabilistic, <b>verifier-grounded</b> framework for self-improving agents.
-      It models each learner as a posterior over a growing competence field, and selects every next
-      learning action to maximize <b>expected learning gain</b> — not immediate success — measured by a
-      real held-out verifier.
+      MDLP is an open-ended, probabilistic, <b>verifier-grounded</b> framework for self-improving learners —
+      software agents <em>and</em> humans. It models each learner as a posterior over a growing competence
+      field, and selects every next action to maximize <b>expected learning gain</b> — not immediate
+      success — measured by a real held-out verifier.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">Get started →</a>
+      <a class="btn btn-primary" href="#features">Explore the features →</a>
       <a class="btn btn-ghost" href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">Read the paper</a>
     </div>
   </div>
@@ -126,37 +127,197 @@
   </div>
 </section>
 
+<!-- FEATURES -->
+<section id="features">
+  <div class="wrap">
+    <h2>The capability suite</h2>
+    <p class="sub">
+      Six capabilities extend the v0.2 core — each specified as build-ready code with tests, and each cleared
+      the <a href="#gate">360° review gate</a> (score in parentheses). They share one decision core: the
+      <b>Tutor</b>, a generic strategist that selects the next action and swaps in teaching strategies kept only
+      if they raise held-out gain.
+    </p>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="k">A1 · selection</div>
+        <h3>Information-gain selection</h3>
+        <p>Pick the most <em>diagnostic</em> action, not the easiest win: <code class="inline">U(a)=(1−w)·z(E[Δc]) + w·z(EIG)</code> with a closed-form Beta information gain. Bias-free action and fastest learning turn out to be the same move.</p>
+        <div class="chips"><span class="chip ok">approved · 85/100</span></div>
+      </div>
+      <div class="card">
+        <div class="k">A5 · warm-start</div>
+        <h3>Learners like you</h3>
+        <p>Kill cold-start by borrowing a calibrated prior from similar learners (kNN over competence trajectories, MMR diversity to avoid a filter bubble). Influence decays as the learner's own evidence arrives.</p>
+        <div class="chips"><span class="chip ok">approved · 82/100</span></div>
+      </div>
+      <div class="card">
+        <div class="k">B4 · spacing</div>
+        <h3>Forgetting-aware review</h3>
+        <p>Review exactly when memory is about to fade: retention <code class="inline">R(t)=exp(−t/S)</code>, scheduled at a target recall; stability <code class="inline">S</code> grows with each spaced success, contracts on a lapse.</p>
+        <div class="chips"><span class="chip ok">approved · 82/100</span></div>
+      </div>
+      <div class="card">
+        <div class="k">B1 · misconceptions</div>
+        <h3>Name the bug, not "wrong"</h3>
+        <p>Cluster <em>error traces</em> → admit a misconception only if it predicts future errors on held-out items → link it to the corrupted prerequisite → select the remediation. The highest-differentiation app.</p>
+        <div class="chips"><span class="chip ok">approved · 82/100</span></div>
+      </div>
+      <div class="card">
+        <div class="k">B2 · prereq gaps</div>
+        <h3>Fix the cause, not the symptom</h3>
+        <p>On repeated failure, walk the prerequisite graph <em>backward</em>, use the posterior to find the deepest unmastered prereq — the root gap — confirm it with held-out items, then redirect.</p>
+        <div class="chips"><span class="chip ok">approved · 83/100</span></div>
+      </div>
+      <div class="card">
+        <div class="k">B3 · fleet transfer</div>
+        <h3>One agent teaches another</h3>
+        <p>Cross-agent skill transfer under zero-trust: validate a transferred skill on isomorphic variants, quarantine it behind the full commit gate before it touches the fleet. Mastery compounds across agents.</p>
+        <div class="chips"><span class="chip ok">approved · 82/100</span></div>
+      </div>
+    </div>
+
+    <p class="sub" style="margin:34px 0 18px">Built on three layers already in the v0.2 spec:</p>
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="k">§13 · tutor</div>
+        <h3>Tutor + pluggable Teachers</h3>
+        <p>A generic decision core picks the action; concrete Teachers (teaching strategies) and LearnerAdapters (human / agent) plug in behind ports — Teachers are admitted only by held-out gain.</p>
+        <div class="chips"><span class="chip v02">in v0.2</span></div>
+      </div>
+      <div class="card">
+        <div class="k">§14 · calibration</div>
+        <h3>Honest confidence</h3>
+        <p>An ECE/Brier monitor + isotonic recalibration + an <code class="inline">n_eff</code> deflation give a posterior whose stated confidence matches reality — every gate inherits it, and miscalibration trips the breaker.</p>
+        <div class="chips"><span class="chip v02">in v0.2</span></div>
+      </div>
+      <div class="card">
+        <div class="k">§15 · re-visiting</div>
+        <h3>The surprise loop</h3>
+        <p>Re-deriving a past data point is a first-class action; insight is Bayesian surprise. Trigger a loop on expected information gain, stop it when the surprise dies — learning loops that shorten as you assimilate.</p>
+        <div class="chips"><span class="chip v02">in v0.2</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEARNERS -->
+<section id="learners">
+  <div class="wrap">
+    <h2>One algorithm, two learners</h2>
+    <p class="sub">
+      The posterior, the gates, and information-gain selection are <em>not</em> agent-specific. Only the
+      <code class="inline">LearnerAdapter</code>'s likelihood changes — swap the verifier behind the same ports
+      and the whole machinery serves a human student or a software agent unchanged.
+    </p>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="k">agent learner</div>
+        <h3>Execution is the oracle</h3>
+        <p>The verifier is cheap and reliable: a code change → run <code class="inline">pytest</code> on held-out tests → pass/fail. Schema and task-success checks play the same role. Thousands of evals, near-zero label noise.</p>
+        <ul class="tight">
+          <li>outcome = execution / schema / task success</li>
+          <li>Milestone-0 domain: coding tasks with held-out tests</li>
+          <li>fleet transfer (B3) compounds mastery across agents</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="k">human learner</div>
+        <h3>Assessment is the oracle</h3>
+        <p>Held-out assessment + IRT-3PL (guessing-corrected) + a <b>behavioural-signal likelihood</b> (response time, hints, attempts) feed the same posterior, admitted by predictive validity rather than an execution oracle.</p>
+        <ul class="tight">
+          <li>defeats teaching-to-the-test, cramming, and lucky guesses</li>
+          <li>gated by the C1 go/no-go before any human-ed app ships</li>
+          <li>worked domain: <b>Frappe custom-app dev + ERPNext</b> — code/config you can run, a near-agent-grade oracle</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">
+      <b>Why Frappe/ERPNext for the human go/no-go:</b> the learner's work product is code and configuration you
+      can install and assert against — which lifts the hardest problem in human assessment (no execution oracle).
+      It sits at the GO end of the tractability spectrum. See the
+      <a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/HUMAN-LEARNING-M0-FRAPPE.md" target="_blank" rel="noopener">C1 domain instantiation</a>.
+    </div>
+  </div>
+</section>
+
+<!-- REVIEW GATE -->
+<section id="gate">
+  <div class="wrap">
+    <h2>Every feature passed a 360° review gate</h2>
+    <p class="sub">
+      No capability enters the suite on assertion. Each one is scored from nine viewpoints, then formally
+      approved only above a hard confidence bar — a separation of duties that caught real flaws (and forced
+      real fixes) before approval.
+    </p>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="k">step 1 · review-360</div>
+        <h3>Nine viewpoints, 0–100</h3>
+        <p>Correctness, design faithfulness, red-team resistance, implementability, safety/integrity, efficiency, completeness, consistency, calibration — plus an adversarial pass. The score is the <em>minimum</em> of the critical-dimension floor and the weighted mean, so one critical failure can't be averaged away.</p>
+      </div>
+      <div class="card">
+        <div class="k">step 2 · change-approver</div>
+        <h3>Approve only above the bar</h3>
+        <p>A separate approver grants APPROVE only when confidence &gt; 80, every critical dimension ≥ 70, and zero blockers remain — with a check-on-the-checker that overrides a headline score contradicted by its own findings.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <b>All six capabilities cleared it</b> (82–85/100), several only after multiple revision rounds.
+      The full audit trail — every review and decision record — lives in
+      <a href="https://github.com/nithun/multi-dimensional-learning-pathway/tree/main/docs/research/reviews" target="_blank" rel="noopener"><code class="inline">docs/research/reviews/</code></a>.
+    </div>
+  </div>
+</section>
+
 <!-- INSTALL -->
 <section id="install">
   <div class="wrap">
     <h2>Installation</h2>
     <p class="sub">
       The reference implementation is the <code class="inline">mdlp</code> Python package. The algorithm
-      depends only on store <em>ports</em>, so the substrate runs on the full 5-store hybrid
-      (PostgreSQL · MongoDB · Qdrant · Neo4j · Redis · S3/MinIO), brought up with Docker.
+      depends only on store <em>ports</em>: the default runs fully <b>embedded</b> (no infra), and the same
+      code scales to the full 5-store hybrid (PostgreSQL · MongoDB · Qdrant · Neo4j · Redis · S3/MinIO).
     </p>
+
+    <h3>Fastest start — embedded, zero infrastructure</h3>
+    <p class="muted">No config means all-embedded: SQLite + networkx + a local vector index. <code class="inline">pip install</code> and run.</p>
+    <div class="code">
+      <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
+<pre><code class="language-bash">git clone https://github.com/nithun/turing-agents.git
+cd turing-agents/mdlp
+python -m venv .venv && source .venv/bin/activate
+pip install -e .                # core is pure-stdlib; backends are optional extras</code></pre>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="label">python</span><button class="copy">Copy</button></div>
+<pre><code class="language-python">from mdlp.stores import build_stores
+
+stores = build_stores()         # no config → all-embedded, no external services
+# ...run the Milestone-0 loop against the embedded tier
+stores.close()</code></pre>
+    </div>
+
+    <h3 style="margin-top:32px">Scale up — the full 5-store hybrid</h3>
+    <p class="muted">Flip any role to a real backend when the competence field or embedding corpus outgrows in-process. Backends import lazily, so an unused driver need not be installed.</p>
 
     <div class="steps">
       <div class="step">
         <div class="num"></div>
         <div>
           <h3>Prerequisites</h3>
-          <p>Python 3.10+ and Docker (for the five backing services). A GPU is only needed for the optional weight-axis (M2).</p>
+          <p>Python 3.10+ and Docker (for the backing services). A GPU is only needed for the optional weight-axis (M2).</p>
         </div>
       </div>
 
       <div class="step">
         <div class="num"></div>
         <div>
-          <h3>Get the package &amp; install the full tier</h3>
-          <p>Clone the reference implementation — the open-source <code class="inline">mdlp</code> package in the Turing Agents repo — and install the data-layer drivers. Core imports are pure-stdlib; backends are optional extras.</p>
+          <h3>Install the data-layer drivers</h3>
+          <p>Pull all five store drivers, or just the roles you're flipping.</p>
           <div class="code">
             <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
-<pre><code class="language-bash">git clone https://github.com/nithun/turing-agents.git
-cd turing-agents/mdlp
-
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[full]"        # all 5 store drivers
+<pre><code class="language-bash">pip install -e ".[full]"        # all 5 store drivers
 # or one role at a time:  pip install -e ".[postgres]" ".[redis]"</code></pre>
           </div>
         </div>
@@ -165,7 +326,7 @@ pip install -e ".[full]"        # all 5 store drivers
       <div class="step">
         <div class="num"></div>
         <div>
-          <h3>Bring up the five stores</h3>
+          <h3>Bring up the stores</h3>
           <p>Each store role maps to a service. Start them with Docker Compose, then point the config at localhost.</p>
           <div class="code">
             <div class="bar"><span class="label">bash</span><button class="copy">Copy</button></div>
@@ -179,7 +340,7 @@ docker compose ps               # all healthy?</code></pre>
         <div class="num"></div>
         <div>
           <h3>Wire the stores in Python</h3>
-          <p>One call builds the whole hybrid; or mix tiers per role. Backends import lazily, so an unused driver need not be installed.</p>
+          <p>One call builds the whole hybrid; or mix tiers per role.</p>
           <div class="code">
             <div class="bar"><span class="label">python</span><button class="copy">Copy</button></div>
 <pre><code class="language-python">from mdlp.stores import build_stores
@@ -197,7 +358,6 @@ stores = build_stores({
     "cache":    "redis://localhost:6379/0",
     "artifact": "s3://mdlp-artifacts",
 })
-
 stores.close()</code></pre>
           </div>
         </div>
@@ -229,7 +389,7 @@ docker compose up -d &amp;&amp; MDLP_INTEGRATION=1 pytest tests/integration   # 
 <section id="tutorials">
   <div class="wrap">
     <h2>Tutorials</h2>
-    <p class="sub">Common things you'll do once the stores are up.</p>
+    <p class="sub">Common things you'll do once the package is installed.</p>
 
     <h3>Link a project's agents to the learning loop</h3>
     <p class="muted">Discover every agent, ingest the framework's logs, and print per-agent competence.</p>
@@ -279,9 +439,9 @@ rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</
       <tbody>
         <tr><td><code>TruthStore</code></td><td>PostgreSQL</td><td>cold</td><td>canonical event log, eval results, lineage</td></tr>
         <tr><td><code>StateStore</code></td><td>MongoDB</td><td>warm</td><td>the growing competence field (schemaless)</td></tr>
-        <tr><td><code>VectorStore</code></td><td>Qdrant</td><td>hot</td><td>embeddings · recall · failure clustering</td></tr>
-        <tr><td><code>GraphStore</code></td><td>Neo4j</td><td>hot</td><td>pathway graph · prereqs · MCTS tree</td></tr>
-        <tr><td><code>CacheStore</code></td><td>Redis</td><td>hot</td><td>materialized frontier · "act fast" layer</td></tr>
+        <tr><td><code>VectorStore</code></td><td>Qdrant</td><td>hot</td><td>embeddings · recall · failure clustering (B1)</td></tr>
+        <tr><td><code>GraphStore</code></td><td>Neo4j</td><td>hot</td><td>pathway graph · prereqs (B2) · MCTS tree</td></tr>
+        <tr><td><code>CacheStore</code></td><td>Redis</td><td>hot</td><td>materialized frontier · spacing scheduler (B4)</td></tr>
         <tr><td><code>ArtifactStore</code></td><td>S3 / MinIO</td><td>cold</td><td>checkpoints · datasets · model registry</td></tr>
       </tbody>
     </table>
@@ -290,9 +450,9 @@ rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</
     <div class="grid grid-3">
       <div class="card"><div class="k">state</div><p>dual Beta posteriors, <code class="inline">n_min</code> floor, <code class="inline">significant()</code>, learning-progress-as-slope</p></div>
       <div class="card"><div class="k">eval</div><p>verifier (output ∧ shape ∧ counterfactual), held-out/public split, reliability-gated admission</p></div>
-      <div class="card"><div class="k">decision</div><p>learning-gain π — Thompson over LP, coverage floor, hard cost constraint</p></div>
-      <div class="card"><div class="k">memory</div><p>skill library — held-out-clean retrieval, counterfactual credit</p></div>
-      <div class="card"><div class="k">loop</div><p>composite commit/rollback gate + circuit breaker</p></div>
+      <div class="card"><div class="k">decision</div><p>the Tutor — info-gain π (A1), Thompson over LP, coverage floor, hard cost constraint</p></div>
+      <div class="card"><div class="k">memory</div><p>skill library — held-out-clean retrieval, counterfactual credit, warm-start (A5)</p></div>
+      <div class="card"><div class="k">loop</div><p>composite commit/rollback gate + circuit breaker + calibration monitor</p></div>
       <div class="card"><div class="k">growth</div><p>provision-coupled schema growth + merge / prune / edge-decay</p></div>
     </div>
   </div>
@@ -302,15 +462,16 @@ rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</
 <section id="paper">
   <div class="wrap">
     <h2>Paper &amp; design</h2>
-    <p class="sub">The full research chain — every prior-art claim primary-source verified, the design adversarially hardened.</p>
+    <p class="sub">The full research chain — every prior-art claim primary-source verified, the design adversarially hardened, the build-specs gate-approved.</p>
     <div class="grid grid-2">
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">The paper →</a></h3><p>Method, related work, and a pre-registered evaluation protocol (baselines, ablations, metrics).</p></div>
-      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/REPORT-self-learning-agents.md" target="_blank" rel="noopener">Feasibility report →</a></h3><p>The go/no-go, the two-axis (memory + weight) analysis, and the evidence base.</p></div>
-      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.2-pathway-learner.md" target="_blank" rel="noopener">Algorithm v0.2 →</a></h3><p>The hardened spec: the gate primitive, growth provisioning, soft reachability, two-stage promotion.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.2-pathway-learner.md" target="_blank" rel="noopener">Algorithm v0.2 →</a></h3><p>The hardened spec (§1–§15): gate primitive, growth provisioning, soft reachability, Tutor, calibration, re-visiting.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/BUILD-SPECS.md" target="_blank" rel="noopener">Build specs →</a></h3><p>The six gate-approved capabilities (A1, A5, B1–B4) as implementable code-with-tests, each with its review record.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-INTEGRATIONS.md" target="_blank" rel="noopener">Integration register →</a></h3><p>Every brainstorm learning mapped to its landing point in the algorithm — the single source of truth for what's built vs. pending.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/HUMAN-LEARNING-VERIFIER.md" target="_blank" rel="noopener">Human verifier (C1) →</a></h3><p>The human-side go/no-go: held-out assessment + IRT + behavioural signals, with the M0 protocol and the Frappe/ERPNext domain.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.1-redteam.md" target="_blank" rel="noopener">Red-team →</a></h3><p>~40 findings → 8 root causes; the adversarial pass that produced the hardened design.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/LANDSCAPE-self-learning-agents.md" target="_blank" rel="noopener">Landscape &amp; gaps →</a></h3><p>The 2023–26 field of self-learning agents (24 verified sources) + a candid analysis of where MDLP falls short.</p></div>
-      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/IMPLEMENTATION-REVIEW.md" target="_blank" rel="noopener">Implementation review →</a></h3><p>A read-only review of the reference build: faithful v0.2 machinery, but the learning claim is still gated on a live run.</p></div>
-      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/IMPROVEMENT-NOTE-turing-agents.md" target="_blank" rel="noopener">Improvement note →</a></h3><p>Prioritized P0–P3 hand-off for the reference implementation.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/RELEASE-PLAN-v2.md" target="_blank" rel="noopener">v2 release plan →</a></h3><p>The plan to ship the algorithm + library as an installable release — scope tiers, the M0 gate, and the cut line.</p></div>
     </div>
   </div>
 </section>
@@ -320,7 +481,7 @@ rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</
 <footer>
   <div class="wrap">
     <span>MDLP — Multi-Dimensional Learning Pathways · MIT</span>
-    <span>Built from research → algorithm → red-team → v0.2 → paper.</span>
+    <span>research → algorithm → red-team → v0.2 → build-specs → review gate.</span>
   </div>
 </footer>
 

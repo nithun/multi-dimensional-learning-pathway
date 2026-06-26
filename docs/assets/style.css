@@ -170,3 +170,12 @@ footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; g
 
 ul.tight { margin: 6px 0 0; padding-left: 20px; }
 ul.tight li { color: var(--text-dim); margin: 4px 0; font-size: 14.5px; }
+
+/* Status chips (capability maturity) */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.chip {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .02em;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim);
+}
+.chip.ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.chip.v02 { color: var(--text-dim); border-style: dashed; }
