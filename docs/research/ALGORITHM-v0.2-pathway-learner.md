@@ -283,6 +283,8 @@ The v0.1 "runnable subset" was where two pilot-killers fired. Stage the pilot so
 
 These are the dials a Milestone-0/1 empirical pass tunes. None is guessed in the spec; all are explicit.
 
+**Added-section parameters (extend §12):** §14 `n_eff` deflation + per-band ECE/Brier thresholds · §16 `b_ret` (retrieve budget), `K` (diminishing-returns count), `(α_Q0,β_Q0)` (answer-belief prior) · §17 `b_sm` (`self_modify` budget), `sandbox_cost_cap`, `scaffold_retention`, `w_promo` (Stage-2 rollback window) · §18 `N` (fleet size), `ρ_fleet` (fleet-coverage discount), `f_xfer` (inter-agent transfer frequency), `τ_cache` (fleet-cache staleness bound). §17/§18 dials are tuned at **M3**.
+
 ---
 
 ## 13. The Tutor layer — generic strategist + pluggable Teachers (added 2026-06-26)
@@ -441,6 +443,82 @@ Inner `retrieve`/act runs **hot, within-episode** (over `Q`, ms, under the §16.
 - `test_retrieve_cannot_substitute_for_practice` — under heavy retrieval, §5.3 `f_min` coverage of weak skills is still met by outer-loop practice.
 - `test_eig_q_expected_not_realized` — `EIG_Q` at selection is computed from `Q`'s current Beta; the realised held-out outcome only updates the reranker.
 
+## 17. The self-modification axis — improve the scaffold, never the judge (added 2026-06-27)
+
+*Additive: a third learning axis beside the **memory axis** (skills, §5.1) and the **weight axis** (parameters, §9 / M2). `self_modify` edits **only** the agent's **SOLVE** code behind a hard **SOLVE/JUDGE partition** (§17.1), gated by §8 + a **code-specific two-stage promotion** (§17.3 — the code analog of §9, which is weight-only). A new milestone **M3**, gated on M2. Owner go-decision recorded 2026-06-27 (supersedes BUILD-SPECS G1 "await go"). It adds an action type, an architectural boundary, and a code-promotion procedure — the §1–§16 mechanisms are unchanged.*
+
+**The core.** The highest-leverage, cheapest gains are often not a new skill or new weights but a better **scaffold** — solve-prompts, tool-wiring, decision heuristics, retrieval config *around the frozen model* (DGM-style "exceed your designed scope"). §17 makes editing that scaffold a first-class, verifier-gated action behind one boundary: **the agent may edit how it SOLVES, never how it is JUDGED.** (An *evolutionary analogy*, not a formal Gödel-machine proof — §8 is a statistical gate, not a theorem-prover.)
+
+### 17.1 The SOLVE/JUDGE partition (the load-bearing construct)
+Every component is statically partitioned into two disjoint sets; `self_modify` may write **only** SOLVE:
+- **SOLVE (mutable):** the solve-scaffold — solve-prompts, tool-wiring, decision heuristics, retrieval config (which stores/queries, §16), and how the agent *reads/interprets* the shared graph & skills. Everything affecting *how a task is attempted*.
+- **JUDGE (immutable — no agent write-path, ever):** the eval harness + verifier (§4); the held-out set (§4.1) **and its generator** (`provision_suite` / item-synthesis, §5.1 — the primary RC-2 surface); the **TeacherAdapter task-distribution** that decides which items a learner faces; the commit/rollback/safety gates (§8); two-stage promotion (§9/§17.3); the circuit breaker + calibration (§14); the **`self_modify` budget enforcer**; the competence posterior `C` and its update path (§3); and the **§6 orchestrator loop** that runs SOLVE and calls JUDGE.
+
+**Wall invariant (static, not policy):** SOLVE has **no write-path and no output-influence into JUDGE** — checked as an import/dataflow constraint before any `self_modify` candidate is admitted. The check is **sound (conservative)**: a candidate it cannot *prove* free of a SOLVE→JUDGE write-path is **rejected**, and SOLVE may not use reflection / `eval` / dynamic import (kept decidable). As a runtime backstop, **JUDGE runs in a separate address space with no SOLVE-held handle** (capability isolation), so the partition holds even where static proof is unavailable. Editing SOLVE changes only *how* the agent solves; the items, verifier, and gates that score it are unreachable. So a captured verifier (RC-2) — **including the data-poisoning variant via item generation** — is **structurally prevented on the partitioned surfaces**.
+
+### 17.2 `self_modify` as a gated action
+`self_modify(component ∈ SOLVE)` proposes a SOLVE-code edit. The candidate is a **scaffold version** kept in an immutable append-only **scaffold-version log** (lineage like §10, *not* §3 cell-posteriors), evaluated by **running the candidate on the immutable held-out suite → Δcompetence** (the §4 signal), and admitted only via §17.3. Unlike §16's `retrieve` (inner-loop, no checkpoint), `self_modify` is a normal **outer** §6 action: it produces a child and passes the gate.
+
+### 17.3 Two-stage promotion for code (the §9 analog — RC-8)
+§9's two-stage promotion is for *weights* (reversible adapter → base merge); code has no adapter, so §17.3 specifies the **code analog**:
+- **Stage 1 — shadow/sandbox.** The candidate SOLVE runs in a **sandbox** (isolated subprocess, no write access outside SOLVE) on the **held-out suite + a monitored live subset**, in **shadow** (scored, not acted on). Promote only if held-out Δcompetence clears §8's four gates **and** the monitored subset shows no regression.
+- **Stage 2 — hot-swap, fallback retained.** The candidate replaces the running SOLVE; the **frozen last-good SOLVE is retained**; a post-promotion monitor triggers **instant rollback** when held-out + monitored-subset competence **drops beyond `significant(Δ, SE)` over a window `w_promo`** (the reversibility §9 gets from a detachable adapter, provided here by the retained fallback).
+
+### 17.4 Risks & gates
+- **Self-sabotage** (an edit breaks the agent) → Stage-1 sandbox + retained frozen fallback + instant rollback; never goes live until it clears §17.3.
+- **Verifier capture** (RC-2, incl. item-generation poisoning) → the §17.1 SOLVE/JUDGE partition + static no-write-path check; `provision_suite` and the TeacherAdapter task-distribution are in JUDGE.
+- **Budget ratchet** (an agent raises its own `self_modify` budget) → the budget enforcer is in JUDGE (§17.1), unwritable.
+- **Graph misuse** → an agent may edit how it *reads* the shared graph (SOLVE), but graph *writes* go through the immutable §8 gate; misreading only lowers its own held-out → rejected.
+- **Unbounded self-editing / thrash** → the §14 breaker + the (immutable) budget `b_sm` + §15.3's diminishing-returns stop.
+
+### 17.5 New parameters & checks (extends §12)
+- **Parameters:** `b_sm` (`self_modify` budget/window), `sandbox_cost_cap` (Stage-1 trial budget), `scaffold_retention` (version-log depth), `w_promo` (Stage-2 rollback-monitor window). Registered in §12.
+- **Milestone:** §17 is **M3**, gated on the M2 weight axis.
+- **Checks (build-spec stubs):** `test_self_modify_cannot_write_JUDGE` (incl. `provision_suite`, TeacherAdapter, budget enforcer); `test_no_write_path_SOLVE_to_JUDGE` (static dataflow); `test_self_modify_off_equals_baseline`; `test_stage1_shadow_then_stage2_rollback`; `test_frozen_fallback_always_runnable`.
+
 ---
 
-*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor (§13) → calibration (§14) → re-visiting loop (§15) → unified retrieval (§16), all additive, 2026-06-26/27. The architecture never changed; the joints did — then the roles were named, the confidence made honest, the loop made to terminate, and retrieval folded into the same value-of-information objective.*
+## 18. Multi-agent populations — co-evolution on the shared substrate (added 2026-06-27)
+
+*Additive: runs §6 per agent over the **shared** 5-store substrate (§10), with per-agent competence and B3 zero-trust transfer. It adds an **optional, significance-gated fleet-coverage term** to the §13.1 objective (off ⇒ exactly §13.1), a fleet-scale restatement of P1 (§18.4), and a `StateStore` **`agent_id` key** (a DATA-LAYER schema delta) — no change to the §3 update, §5 meta-functions, or §8 gates. **M3**, with §17; owner go-decision recorded 2026-06-27.*
+
+**The core.** The substrate is shared; the learners are many. A **population** co-evolves — dividing the frontier, bootstrapping a curriculum no one authored, and (with §17) becoming an evolutionary search (variation `self_modify` / selection held-out / inheritance transfer).
+
+### 18.1 Shared substrate, private competence
+Each agent keeps its **own** posterior `C_a` in a `StateStore` **keyed by `agent_id`** (the schema delta). The **pathway graph** and **validated skill library** are shared (Graph/Vector), written only through the §8 gate — no per-agent direct write-path. Skills cross agents **only** via **B3 zero-trust transfer** — isomorphic-variant re-validation on the *receiver's* held-out, quarantined behind §8 — never by reading another agent's state.
+
+### 18.2 Division of labour (the fleet-coverage term — formula)
+Discount a candidate cell `k`'s value when **another** agent already significantly masters it:
+```
+value'(a→k) = value(a→k) · φ(k),   φ(k) = 1 − ρ_fleet · 1[ ∃ j≠self : significant(ĉ_j(k) − θ, SE_j) ]
+```
+- **|fleet| = 1** ⇒ the `j≠self` set is empty ⇒ `φ ≡ 1` ⇒ the objective is **exactly §13.1** (degeneracy proven, not asserted).
+- **Significance-gated (RC-1):** a thin/uncertain other-agent estimate does not discount.
+- **Floor dominates (RC-7):** the discount is soft (on the objective); the **§5.3 hard coverage floor `f_min`** is applied *after* and never overridden — an agent always samples its own weak skills regardless of fleet coverage.
+- **Cost (O(1), not O(N²)):** `ĉ_j(k)` is read from a **cached fleet-competence projection** (CacheStore, async-updated), not a synchronous fleet scan.
+- **Staleness bound:** the cached `ĉ_j(k)` has a max age `τ_cache`; a stale/missing read is treated **conservatively as no discount** (`φ = 1`), so staleness can never cause an agent to skip a cell it should still cover.
+
+### 18.3 Emergent curriculum
+Agent A's *validated* mastery becomes, through the shared graph, a **prerequisite scaffold** and a bounded **warm-start prior (A5, §18.4)** for agent B — a curriculum no one authored, falling out of graph + transfer.
+
+### 18.4 Measurement independence at fleet scale (the load-bearing boundary)
+Per-agent held-out independence is the rule; cross-agent evidence enters **only** as a bounded prior or a re-validated transfer, **never** as competence credit:
+- **A5 warm-start, bounded:** the prior contributes `n_eff_warm` pseudo-counts (default 3) with influence `≈3/(5+n_own)` that **decays to negligible** as the receiver's own held-out evidence `n_own` grows. The §8 gate credits only the receiver's **own held-out Δ**, so the prior biases the *starting estimate* but **cannot supply gated competence** — P1 (what the gates trust) stays clean. To prevent shared-item-bank leakage, warm-start neighbours contribute **trajectory-shape on held-out-disjoint / isomorphic items** (B3's isomorphic requirement) — no answer-specific signal crosses. Net cross-agent influence on gated competence is **bounded below significance**.
+- **B3 transfer:** re-validated on the receiver's own held-out behind §8.
+
+### 18.5 The evolutionary combination — and why N agents don't compound the risk (§17 × §18)
+Variation = `self_modify` (§17), selection = held-out competence (§8), inheritance = B3 transfer — an evolutionary archive (*analogy*, not a formal Gödel guarantee). **The compound is bounded:** collective optimization pressure on the JUDGE surface is **N × 0**, because JUDGE is immutable for **every** agent (§17.1's partition is per-agent; the *shared* JUDGE has no agent's write-path). What scales with N is SOLVE-attempts and transfer volume — and every transfer is re-validated on the receiver's immutable held-out. So a population **cannot collectively capture the judge**; the worst case is N agents independently failing to game an immutable judge.
+
+### 18.6 Risks & gates
+- **Shared overfitting** (P1 break) → per-agent held-out; cross-agent evidence only as bounded prior / re-validated transfer (§18.4).
+- **Monoculture / collapse** → the §18.2 fleet-coverage term + MMR diversity (`λ_div`, as in A5/B3).
+- **Transfer poisoning** → B3 zero-trust + quarantine + receiver-side re-validation; a poisoned skill fails the receiver's §8 gate.
+- **Collective verifier capture** → §18.5: JUDGE immutable for every agent; N × 0 write-access.
+
+### 18.7 New parameters & checks (extends §12)
+- **Parameters:** fleet size `N`, fleet-coverage discount `ρ_fleet`, B3 inter-agent trigger frequency `f_xfer`, fleet-cache staleness bound `τ_cache`. Registered in §12.
+- **Checks (build-spec stubs):** `test_fleet_of_one_equals_single_agent`; `test_no_cross_agent_state_read`; `test_transfer_revalidated_on_receiver_heldout`; `test_fleet_coverage_spreads_frontier`; `test_coverage_floor_dominates_fleet_discount`; **`test_fleet_self_modify_cannot_collectively_capture_verifier`** (N self-modifying agents cannot move held-out generation — JUDGE immutable for all).
+
+---
+
+*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor (§13) → calibration (§14) → re-visiting loop (§15) → unified retrieval (§16) → self-modification axis (§17) → multi-agent populations (§18), all additive, 2026-06-26/27. The architecture never changed; the joints did — the roles named, the confidence made honest, the loop made to terminate, retrieval folded into the value-of-information objective, and the learner opened to edit its own scaffold and to co-evolve in a population — always behind the same judge it can never rewrite.*

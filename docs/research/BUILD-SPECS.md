@@ -258,10 +258,10 @@ The register's E levers are realized by the already-approved/specced items; E ad
 ## 🔭 G · Frontier directions — scope decisions (design sketches, not build-gated)
 
 These are **decide-or-defer**, not committed builds, so they are not run through the build-gate; each needs an explicit go decision first.
-- **G1 self-modification axis** (DGM-style — the agent edits its own scaffold/decision/retrieval code around frozen models). Sketch: add `self_modify` as a §6 action type whose effect is gated by the same held-out commit + a hard reversibility/two-stage-promotion requirement (it edits *code*, so safety dominates). **Decision needed:** appetite for code-level self-edits + the safety budget.
+- **G1 self-modification axis + multi-agent populations** — ▶ **owner go-decision 2026-06-27.** Designed as ALGORITHM-v0.2 **§17** (self-modification behind the SOLVE/JUDGE partition + code two-stage promotion) and **§18** (multi-agent co-evolution on the shared substrate), targeting milestone **M3**. In the review→approve gate. *(Original sketch: `self_modify` as a §6 action gated by held-out commit + reversibility; safety dominates because it edits code — realised as the SOLVE/JUDGE immutability partition.)*
 - **G2 task/curriculum generator** (Absolute-Zero / R-Zero style — generate own problems from zero data). Sketch: a Challenger that proposes items at the learner's frontier, gated by the verifier (only verifiable generated items enter). **Decision needed:** is the domain one where novel items can be auto-verified?
 - **G3 learned (meta-RL) Tutor policy** — make `π` itself *learned* rather than hand-designed (the survey's named frontier). Sketch: meta-RL over the Tutor's action-selection, rewarded by long-horizon held-out gain. **Decision needed:** this is a research program, not a milestone — defer until A1–B3 are validated.
 
 ---
 
-*Done: A1, A5, B4, B1, B2, B3 ▣ all approved (review-360 >80 → change-approver APPROVED) · E ▣ covered (no separate build) · 🔭G design-sketched (scope decisions, await owner go). Every build cleared the two-stage gate: 360° review → approval. Nothing left in the gate.*
+*Done: A1, A5, B4, B1, B2, B3 ▣ all approved (review-360 >80 → change-approver APPROVED) · E ▣ covered · §16 unified retrieval ▣ approved · **G1 self-mod + multi-agent: owner go-decision 2026-06-27 → designed as §17/§18 (M3), in the gate**. Every build cleared the two-stage gate: 360° review → approval.*

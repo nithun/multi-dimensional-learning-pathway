@@ -61,7 +61,7 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 ## G · Aspirational / frontier (decide or defer)
 | Direction | Status | Note |
 |---|---|---|
-| Self-modification axis (DGM-style; "exceed your designed scope") | 🔭 | from landscape §7 + Source Code |
+| **Self-modification axis** (DGM-style; "exceed your designed scope") + **multi-agent populations** (co-evolution on the shared substrate) | ✅ ▣ | §17 / §18 · owner go-decision 2026-06-27 → gate-approved (review-360 82/100, 3 rounds → change-approver); targets **M3** |
 | Task/curriculum generator (Absolute-Zero / R-Zero style) | 🔭 | from landscape §7 |
 | Learned (meta-RL) Tutor policy — make π itself *learned*, not hand-designed | 🔭 | the survey's named frontier |
 
@@ -69,6 +69,7 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 
 ## What's actually built vs. pending
 - **✅ In v0.2 now:** dual-posterior state + `significant()` (§2–3), the eval/gates (§4, §8), the data layer (§10), the **Tutor layer** (§13), the **calibration layer** (§14), the **re-visiting loop** (§15), **unified retrieval / 5-store RAG** (§16).
+- **▣ Gate-approved design, future milestones:** **self-modification axis** (§17) + **multi-agent populations** (§18) — review-360 → change-approver APPROVED; target **M3** (after the M2 weight axis).
 - **▣ Gate-approved build-specs** ([`BUILD-SPECS.md`](BUILD-SPECS.md), each cleared review-360 >80 → change-approver APPROVED): info-gain selection (A1, 85), warm-start (A5, 82), forgetting-aware spacing (B4, 82), misconception clustering (B1, 82), prereq-gap diagnosis (B2, 83), fleet transfer (B3, 82). Implementable specs with tests; **not yet code**.
 - **🆕 Still design-only (not spec'd):** behavioural likelihood + human verifier (C1 — design + M0 protocol done; **domain chosen: Frappe custom-app dev + ERPNext implementation**, instrument instantiated in [`HUMAN-LEARNING-M0-FRAPPE.md`](HUMAN-LEARNING-M0-FRAPPE.md); awaits a cohort + item bank + assertion suites to run).
 - **🔭 Scope decisions:** self-modification, task generation, learned-π — plus **D1, the flagship** (human-ed vs agent vs unified).
