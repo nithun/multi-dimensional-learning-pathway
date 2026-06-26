@@ -356,4 +356,35 @@ calibration window · `c_band` bounds · `τ_cal` breaker threshold · recalibra
 
 ---
 
-*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor layer (§13) → calibration layer (§14), both additive, 2026-06-26. The architecture never changed; the joints did, then the roles were named, then the confidence was made honest.*
+## 15. Re-visiting data — the surprise-gated learning loop (added 2026-06-26)
+
+*Additive, like §13/§14. Formalises "the same data point teaches you something new each time you return to it." Rides §2's `significant()` + §13.1's info-gain Tutor + §3/§10's versioned state — no §1–§14 mechanism changes.*
+
+**The core.** An **insight is a prediction error** — the gap between what a data point implies and what the current model expected (Bayesian surprise). Two properties follow: it is **state-dependent** (a moved model → a new gap → a new insight) and it **decays to zero as you assimilate** (once the model predicts the data, no gap remains). So a data point is not a fixed lesson but a **generator** of state-dependent surprise; "infinite pathways in one point" = the infinitely many model-states it can be read from.
+
+### 15.1 Re-derivation as a first-class action
+`revisit(D)` joins `apply(a)` as an action the Tutor can select: re-process a stored data point `D` through the *current* state to extract its current surprise. Chosen by the same §13.1 objective — **expected information gain** `E[ΔH | D, state]`.
+
+### 15.2 Trigger — when to re-enter
+`revisit(D)` becomes attractive when its expected info-gain clears the bar, which happens when: the **model has moved** since last visit (Δposterior > threshold); a **new input is semantically close** to D (vector) and re-activates it; a **downstream failure** walks back (graph) to D as a root-cause candidate; or **spacing** says the relevant cells are about to be forgotten (decay).
+
+### 15.3 Stop — when to terminate (the natural bound)
+The loop self-terminates when re-processing yields no significant gain: **realized gain < threshold** (`significant(ΔH, SE)` fails → assimilated → stop); a **diminishing-returns floor** (K low-gain visits → stop); a **per-revisit budget** (a bounded "8-minute clock" that forces max-info spend and **stops rumination**); and the **circuit breaker** (oscillation/thrash → halt, §14). This is what makes "return endlessly" computable — you *may* revisit any point infinitely, but you only *will* when it's expected to surprise you, and *stop* when it doesn't: **infinity bounded by information, not enumeration.**
+
+### 15.4 Within-episode search (two-level MCTS) — *deterministic domains only*
+Where an episode is **replayable** (agents in code/sim domains), `revisit(D)` may run a *search inside D*: re-play the same fixed data point under different actions to find the best move *before committing* — MCTS at the episode level, nested under the §6 graph-level search. *(For live human learning the episode is not replayable; `revisit` degrades to re-reading the record — still the surprise loop, without the clean replay.)*
+
+### 15.5 Two efficiency rules
+- **Loops shorten as you assimilate.** As surprise concentrates (per §14's calibrated confidence), skip the already-predicted parts of D and spend the budget only on the high-surprise remainder — re-visit cost shrinks each pass.
+- **Negative evidence is information.** A *failed* revisit/eval still reduces uncertainty ("ruled out X"); count it as info-gain and **persist the narrowing**, not just the successes.
+
+### 15.6 Storage — generative, not enumerative
+Don't store the infinite paths. A path = `f(D, state@t)`, so store the **generators** — immutable data `D` (truth, §10) + **checkpoint-versioned state** (§3) — and regenerate any path on demand. **Materialise only high-surprise insights** (those clearing the §2 gate) into the skill library + a **graph derivation edge** (so one data node carries multiple realised paths). Finite storage, unbounded paths.
+
+### 15.7 Risks & gates
+- **Rumination** (revisit forever) → budget + diminishing-returns floor (§15.3).
+- **False insight / confabulation** (a "pattern" that doesn't generalise) → the **verifier + calibration**: an insight is kept only if it raises *held-out* competence (§4, §8), never because it *felt* like one. That gate is the line between genuine insight and self-deception.
+
+---
+
+*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor (§13) → calibration (§14) → re-visiting loop (§15), all additive, 2026-06-26. The architecture never changed; the joints did, then the roles were named, the confidence made honest, and the loop made to terminate.*

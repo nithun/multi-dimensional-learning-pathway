@@ -1,12 +1,13 @@
 # Next steps — backlog distilled from the brainstorm (2026-06-26)
 
-Tracked threads from the "5-store for learning pathways" brainstorm and the bias-free-action / Tutor-layer discussion. Status: **▶ done · ◐ in progress · ○ open**.
+Tracked threads from the "5-store for learning pathways" brainstorm and the bias-free-action / Tutor-layer discussion. The **full map** of every learning → integration point is [`ALGORITHM-INTEGRATIONS.md`](ALGORITHM-INTEGRATIONS.md); this file is the prioritized do-next subset. Status: **▶ done · ◐ in progress · ○ open**.
 
 ## A · Core algorithm refinements (small, high-leverage)
 - ▶ **A0 — Tutor layer integrated into v0.2** (`ALGORITHM-v0.2-pathway-learner.md` §13): generic embedded Tutor + pluggable Teachers (selected by held-out gain) + `LearnerAdapter`.
 - ◐ **A1 — Info-gain mode (§13.1) deepened.** The expected-information-gain math (`argmax E[ΔH]`) + how *advance* vs *diagnose* blend by uncertainty. The bias-free principle made rigorous. *(Seeded in §13.1; full treatment open.)*
 - ○ **A2 — `LearnerAdapter` spec.** Concrete `HumanLearnerAdapter` (behavioural signals → posterior) vs `AgentLearnerAdapter`.
 - ▶ **A3 — Calibration layer integrated into v0.2** (§14): per-band ECE/Brier monitor + isotonic point-recalibration + `n_eff` deflation (the mirror of the `n_min` floor) → honest SE that every existing gate inherits for free; miscalibration as a 5th breaker trigger.
+- ▶ **A4 — Re-visiting / surprise loop integrated into v0.2** (§15): `revisit(D)` as a first-class action; insight = prediction error; info-gain trigger + surprise-decay/budget stop; within-episode MCTS (deterministic domains); negative-evidence-as-gain; generative path storage. Bundles the learning-loop + *Source Code* learnings.
 
 ## B · New capability designs (the high-impact scenarios — design only)
 - ○ **B1 — Misconception clustering → graph-linked remediation** (vector + graph + state). *Highest differentiation — name the bug, not just "wrong."* Gated on C1.
