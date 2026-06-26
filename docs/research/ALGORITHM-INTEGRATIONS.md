@@ -69,7 +69,7 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 ## What's actually built vs. pending
 - **✅ In v0.2 now:** dual-posterior state + `significant()` (§2–3), the eval/gates (§4, §8), the data layer (§10), the **Tutor layer** (§13), the **calibration layer** (§14), the **re-visiting loop** (§15).
 - **▣ Gate-approved build-specs** ([`BUILD-SPECS.md`](BUILD-SPECS.md), each cleared review-360 >80 → change-approver APPROVED): info-gain selection (A1, 85), warm-start (A5, 82), forgetting-aware spacing (B4, 82), misconception clustering (B1, 82), prereq-gap diagnosis (B2, 83), fleet transfer (B3, 82). Implementable specs with tests; **not yet code**.
-- **🆕 Still design-only (not spec'd):** behavioural likelihood + human verifier (C1 — design + M0 protocol done, awaits a cohort + item bank to run).
+- **🆕 Still design-only (not spec'd):** behavioural likelihood + human verifier (C1 — design + M0 protocol done; **domain chosen: Frappe custom-app dev + ERPNext implementation**, instrument instantiated in [`HUMAN-LEARNING-M0-FRAPPE.md`](HUMAN-LEARNING-M0-FRAPPE.md); awaits a cohort + item bank + assertion suites to run).
 - **🔭 Scope decisions:** self-modification, task generation, learned-π — plus **D1, the flagship** (human-ed vs agent vs unified).
 
 ## Recommended sequence (from NEXT-STEPS)

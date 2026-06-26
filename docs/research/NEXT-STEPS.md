@@ -16,7 +16,7 @@ Tracked threads from the "5-store for learning pathways" brainstorm and the bias
 - ○ **B4 — "Learners like you" collaborative pathways** (vector over competence trajectories + graph + truth).
 
 ## C · The gating hard problem
-- ◐ **C1 — The human-learning verifier.** Design (`HUMAN-LEARNING-VERIFIER.md`) + the pre-registered go/no-go experiment (`HUMAN-LEARNING-M0-PROTOCOL.md`): IRT-3PL + behavioural-signal likelihood → the dual posterior; H1–H5, decision rule, MVP (~30 learners, one sub-skill). Gates **all** of B1/B2/B4. *Remaining (owner-supplied): a domain + a learner cohort to run it.*
+- ◐ **C1 — The human-learning verifier.** Design (`HUMAN-LEARNING-VERIFIER.md`) + the pre-registered go/no-go experiment (`HUMAN-LEARNING-M0-PROTOCOL.md`): IRT-3PL + behavioural-signal likelihood → the dual posterior; H1–H5, decision rule, MVP (~30 learners, one sub-skill). Gates **all** of B1/B2/B4. **Domain chosen — Frappe custom-app dev + ERPNext implementation** (`HUMAN-LEARNING-M0-FRAPPE.md`): a near-agent-grade execution oracle (run the code/config, assert the schema/ledger), so this sits at the GO end of the tractability spectrum. *Remaining (owner-supplied): a learner cohort + item bank + the per-item assertion suites.*
 
 ## D · Strategy
 - ○ **D1 — The flagship decision (owner's call):** human-ed app vs deepen the agent engine vs the unified "every learner is a learner" platform.
