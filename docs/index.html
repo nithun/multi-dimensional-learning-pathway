@@ -220,23 +220,25 @@
           <li>Milestone-0 domain: coding tasks with held-out tests</li>
           <li>fleet transfer (B3) compounds mastery across agents</li>
         </ul>
+        <div class="chips"><span class="chip ok">v2 focus</span></div>
       </div>
       <div class="card">
         <div class="k">human learner</div>
         <h3>Assessment is the oracle</h3>
-        <p>Held-out assessment + IRT-3PL (guessing-corrected) + a <b>behavioural-signal likelihood</b> (response time, hints, attempts) feed the same posterior, admitted by predictive validity rather than an execution oracle.</p>
+        <p>The same posterior, gates, and selection serve a human learner — the <code class="inline">LearnerAdapter</code> just swaps the likelihood: held-out assessment + IRT-3PL (guessing-corrected) + a <b>behavioural-signal likelihood</b> (response time, hints, attempts), admitted by predictive validity rather than an execution oracle.</p>
         <ul class="tight">
           <li>defeats teaching-to-the-test, cramming, and lucky guesses</li>
-          <li>gated by the C1 go/no-go before any human-ed app ships</li>
-          <li>worked domain: <b>Frappe custom-app dev + ERPNext</b> — code/config you can run, a near-agent-grade oracle</li>
+          <li>gated by the C1 go/no-go before any human-ed application</li>
+          <li>the roadmap direction that generalizes MDLP beyond agents</li>
         </ul>
+        <div class="chips"><span class="chip design">design · roadmap</span></div>
       </div>
     </div>
     <div class="callout">
-      <b>Why Frappe/ERPNext for the human go/no-go:</b> the learner's work product is code and configuration you
-      can install and assert against — which lifts the hardest problem in human assessment (no execution oracle).
-      It sits at the GO end of the tractability spectrum. See the
-      <a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/HUMAN-LEARNING-M0-FRAPPE.md" target="_blank" rel="noopener">C1 domain instantiation</a>.
+      <b>A future direction, not a v2 feature.</b> The human-learner side is designed, not built — the
+      conceptual pillar that carries one decision core beyond agents. v2 ships the agent path and tags C1 as
+      the next direction; the human-side go/no-go is sketched in the
+      <a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/HUMAN-LEARNING-VERIFIER.md" target="_blank" rel="noopener">C1 design</a>.
     </div>
   </div>
 </section>
@@ -468,7 +470,7 @@ rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.2-pathway-learner.md" target="_blank" rel="noopener">Algorithm v0.2 →</a></h3><p>The hardened spec (§1–§15): gate primitive, growth provisioning, soft reachability, Tutor, calibration, re-visiting.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/BUILD-SPECS.md" target="_blank" rel="noopener">Build specs →</a></h3><p>The six gate-approved capabilities (A1, A5, B1–B4) as implementable code-with-tests, each with its review record.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-INTEGRATIONS.md" target="_blank" rel="noopener">Integration register →</a></h3><p>Every brainstorm learning mapped to its landing point in the algorithm — the single source of truth for what's built vs. pending.</p></div>
-      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/HUMAN-LEARNING-VERIFIER.md" target="_blank" rel="noopener">Human verifier (C1) →</a></h3><p>The human-side go/no-go: held-out assessment + IRT + behavioural signals, with the M0 protocol and the Frappe/ERPNext domain.</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/HUMAN-LEARNING-VERIFIER.md" target="_blank" rel="noopener">Human verifier (C1) →</a></h3><p>Design / roadmap — the human-side go/no-go (held-out assessment + IRT + behavioural signals). Tagged as a future direction; not a v2 deliverable.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.1-redteam.md" target="_blank" rel="noopener">Red-team →</a></h3><p>~40 findings → 8 root causes; the adversarial pass that produced the hardened design.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/LANDSCAPE-self-learning-agents.md" target="_blank" rel="noopener">Landscape &amp; gaps →</a></h3><p>The 2023–26 field of self-learning agents (24 verified sources) + a candid analysis of where MDLP falls short.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/RELEASE-PLAN-v2.md" target="_blank" rel="noopener">v2 release plan →</a></h3><p>The plan to ship the algorithm + library as an installable release — scope tiers, the M0 gate, and the cut line.</p></div>

@@ -54,7 +54,7 @@ Everything ships in v2, but **labelled by maturity** so the release is honest:
 |---|---|---|
 | **① Working (the installable core)** | `state.py` (dual-Beta + `significant()`), `eval/` gates (§4/§8), `decision.py` Tutor with **A1 info-gain** (§13.1), `§14` calibration, embedded 5-store, the **M0 verifier loop** (code-task domain) | runs, tested, **validated on the M0 go/no-go** (held-out competence beats no-learning) |
 | **② Experimental (spec-complete modules)** | **A5** warm-start, **B1** misconception clustering, **B2** prereq-gap, **B4** spacing, **B3** fleet transfer | code present, unit-tested against the approved specs' test lists, **marked `experimental`**; not yet validated end-to-end (needs M1 graph/vector evidence gate) |
-| **③ Design-only (roadmap)** | **C1** human verifier + Frappe M0 (needs a cohort), **M2** weight axis (needs GPU) | shipped as docs + clearly-marked "not implemented; here's the protocol" |
+| **③ Tag / design-only (roadmap)** | **C1** human verifier — **tag-only** (named direction; Frappe/ERPNext instantiation deferred — too much for v2), **M2** weight axis (needs GPU) | C1 ships as a one-line roadmap tag (the verifier + Frappe docs stay as research reference, *not* v2 deliverables); M2 ships as docs |
 
 **[D-3] MVP cut recommendation:** v2.0.0 = **Tier ① validated + Tier ② present-but-experimental + Tier ③ documented.** Do *not* block the release on Tier ② validation — that's M1, gated separately. This keeps v2 shippable on a near horizon while being truthful about maturity.
 
@@ -111,7 +111,7 @@ M1/M2 (validating Tier ②, building the weight axis) are **explicitly post-v2**
 - **Risk: M0 doesn't pass** → mitigated by treating a NO-GO as a *valid, publishable* release outcome (it bounds where the approach applies). The release does not depend on a positive result.
 - **Risk: scope creep into Tier ② validation** → mitigated by the hard cut line in §4 (experimental = shipped unvalidated, by design).
 - **Risk: re-implementing turing-agents work** → the prior build is reference-only; we author fresh in-repo. Some divergence is acceptable and in-scope.
-- **Non-goals for v2:** C1 live run (needs cohort), M2 weight axis (needs GPU), TAP LMS PAL integration, PyPI publish (deferred to v2.1).
+- **Non-goals for v2:** the C1 human verifier beyond a roadmap **tag** (the Frappe/ERPNext instantiation is deferred — too much for v2), M2 weight axis (needs GPU), TAP LMS PAL integration, PyPI publish (deferred to v2.1).
 
 ## 10. Sequenced task board (proposed)
 

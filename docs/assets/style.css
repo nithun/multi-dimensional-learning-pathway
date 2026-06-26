@@ -179,3 +179,4 @@ ul.tight li { color: var(--text-dim); margin: 4px 0; font-size: 14.5px; }
 }
 .chip.ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .chip.v02 { color: var(--text-dim); border-style: dashed; }
+.chip.design { color: var(--text-faint); border-style: dashed; }
