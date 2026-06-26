@@ -29,7 +29,7 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 | Learning | Status | Integration point |
 |---|---|---|
 | Held-out split + generalization + cumulative gates | ✅ | §4, §8 |
-| **Human-learning verifier** — held-out assessment + IRT/guessing + isomorphic variants + predictive-validity admission | 🆕 | `HUMAN-LEARNING-VERIFIER.md` (C1, started) |
+| **Human-learning verifier** — held-out assessment + IRT/guessing + isomorphic variants + predictive-validity admission | 🆕 | `HUMAN-LEARNING-VERIFIER.md` + `HUMAN-LEARNING-M0-PROTOCOL.md` (C1: design + go/no-go protocol) |
 | **Negative evidence is information** — a failed eval/loop narrows the candidate space; store the narrowing | 🆕 | §15 *(from Source Code)* |
 
 ## D · The learning loop — re-visiting data (the §15 cluster)

@@ -2,7 +2,7 @@
 
 **The human-side Milestone-0.** MDLP is verifier-grounded: for agents the verifier is execution / schema / task-success (cheap, reliable). For a *human* learner, what plays that role — and is it reliable enough to learn on? This gates every human-ed scenario (misconception clustering, prerequisite-gap diagnosis, "learners like you"). Design only.
 
-Companion: `ALGORITHM-v0.2-pathway-learner.md` §13 (`HumanLearnerAdapter`); `NEXT-STEPS.md` (C1).
+Companion: `ALGORITHM-v0.2-pathway-learner.md` §13 (`HumanLearnerAdapter`); the **go/no-go experiment**: [`HUMAN-LEARNING-M0-PROTOCOL.md`](HUMAN-LEARNING-M0-PROTOCOL.md); `NEXT-STEPS.md` (C1).
 
 ---
 

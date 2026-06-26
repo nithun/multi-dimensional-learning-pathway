@@ -16,7 +16,7 @@ Tracked threads from the "5-store for learning pathways" brainstorm and the bias
 - ○ **B4 — "Learners like you" collaborative pathways** (vector over competence trajectories + graph + truth).
 
 ## C · The gating hard problem
-- ◐ **C1 — The human-learning verifier** (`HUMAN-LEARNING-VERIFIER.md`). The human-side Milestone-0: held-out assessment + behavioural-signal likelihood as the reward. Gates **all** of B1/B2/B4. *(First draft written this turn.)*
+- ◐ **C1 — The human-learning verifier.** Design (`HUMAN-LEARNING-VERIFIER.md`) + the pre-registered go/no-go experiment (`HUMAN-LEARNING-M0-PROTOCOL.md`): IRT-3PL + behavioural-signal likelihood → the dual posterior; H1–H5, decision rule, MVP (~30 learners, one sub-skill). Gates **all** of B1/B2/B4. *Remaining (owner-supplied): a domain + a learner cohort to run it.*
 
 ## D · Strategy
 - ○ **D1 — The flagship decision (owner's call):** human-ed app vs deepen the agent engine vs the unified "every learner is a learner" platform.
