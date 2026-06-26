@@ -385,6 +385,62 @@ Don't store the infinite paths. A path = `f(D, state@t)`, so store the **generat
 - **Rumination** (revisit forever) → budget + diminishing-returns floor (§15.3).
 - **False insight / confabulation** (a "pattern" that doesn't generalise) → the **verifier + calibration**: an insight is kept only if it raises *held-out* competence (§4, §8), never because it *felt* like one. That gate is the line between genuine insight and self-deception.
 
+## 16. Unified retrieval — value-of-information over a typed action space (added 2026-06-27)
+
+*Additive: it adds a within-`EXPAND` **inner loop** to §6 and a second, **episode-scoped** belief `Q` — **no change to the §5 meta-functions, the §3 state model, or the §7–§8 backup/commit/gate machinery.** Merges a "5-store RAG" into the learner: retrieval is the **inner loop of the same algorithm**, scored by the same value-of-information *form* as learning. Rides §5.2 (state-conditioned retrieval + counterfactual credit), §13.1/A1 (info-gain), §10 (the five stores), §15.1 (revisit-as-action).*
+
+**The core.** Retrieval and learning share one **form** — value of information minus cost — applied to two beliefs at two cadences. Learning reduces (and raises) uncertainty about durable **competence `C`**; retrieval reduces uncertainty about the **current answer `Q`**. The merge is **not one flat `argmax`**; it is **one algorithm, two levels** (like §15.4): a fast inner loop that retrieves to sharpen `Q`, nested inside the slow outer loop that learns and commits on `C` — same 5-store substrate, same verifier outcome training both. "One objective, one substrate" — *two* beliefs.
+
+### 16.1 Where `retrieve` lives in §6 (the dispatch path)
+The §6 outer loop is unchanged: `SELECT → EXPAND → EVALUATE → GROW → BACKUP → COMMIT`, every outer action still produces a `child` checkpoint through `commit_gate`. `retrieve(store, query)` is **not** an outer action: it produces **no** child node and touches **no** gate. It is the **inner loop inside `EXPAND`** — before an `apply`/`attempt` emits its outcome, the agent runs `retrieve` steps that update `Q`. So there are **two selection problems**:
+- **inner `π_Q`** (within `EXPAND`, per step): which `retrieve` next — `argmax z(EIG_Q) − cost`;
+- **outer `π_C`** (across episodes, §13.1/A1, **unchanged**): which learning action to commit.
+
+This is the honest form of "one policy": **one value-of-information rule dispatched at two cadences**, not a single `choose()` over mixed action types.
+
+### 16.2 The two beliefs (representation)
+- **`C`** — the durable competence posterior (§3), dual Beta per skill×difficulty. Unchanged.
+- **`Q`** — the **answer-correctness belief** for the current goal: a Beta over `P(current best answer correct | context retrieved so far)`. **Binary by construction** — it projects any output (plan, query, entity choice) onto the verifier's pass/fail — so `EIG_Q` **reuses A1's closed-form Beta information gain verbatim**. `Q` is episode-scoped: initialised at goal start, updated by each `retrieve`, **discarded at goal completion**. (A richer multi-outcome `Q` is possible but out of scope; the correctness projection is what keeps `EIG_Q` closed-form.)
+
+### 16.3 The objective (one form, two instantiations — A1-faithful)
+Both loops use A1's **z-scored** value-of-information so terms are commensurable. The z-scoring is **mandatory** — dropping it reopens v0.1's λ/μ knife-edge (RC-1):
+
+```
+inner (over Q):   U_Q(retrieve) = z(EIG_Q) − cost(retrieve)
+outer (over C):   U_C(a)        = (1−w)·z(E[ΔC | a]) + w·z(EIG_C(a))     ← A1, unchanged
+```
+
+`EIG_Q`/`EIG_C` are A1's closed-form Beta entropy reduction computed from the **current** posterior at selection time — an **expected** gain, not a realised one. The **realised** held-out answer outcome at episode end is the **training signal** for the inner reranker (§16.5), not the per-step score. **Reduction to A1:** disable retrieval (`Q` empty, inner loop skipped) and the system is exactly A1 — `U_Q` never fires, `U_C` is A1 verbatim. "Solve-now vs learn" lives **across** the two loops (how much to retrieve before committing), never collapsed into one scalar.
+
+### 16.4 The five stores as one retrieval substrate
+`retrieve` is multi-modal; inner `π_Q` learns which store to call by measured contribution (not all are queried per step). Mapping to §10:
+- **vector** (Vector) — semantic recall (top-k similar content / trajectories);
+- **graph** (Graph) — structural / multi-hop (prereqs, entity links, dependencies): what's *connected*, not just similar;
+- **truth** (SQL) — factual / provenance (exact records, eval history, lineage) → grounding + citations;
+- **state** (StateStore/Document) — **state-conditioned** against `C`: skip the mastered, fetch the gap (§5.2);
+- **cache** (Redis) — the hot path: materialised frequent context, the "act fast" layer;
+- **artifact** (ObjectStore) — the cold blobs behind the references.
+
+### 16.5 Self-improving retrieval (inherits the gates)
+`retrieve` is an action with a measured outcome, so the **same verifier signal** that updates `C` also trains the inner reranker — under §5.2's **counterfactual (leave-one-out) credit**: a source is rewarded only for the lift it *uniquely* caused at the held-out answer outcome, never shared delta (RC-1). State-aware, self-improving retrieval under existing machinery — **no separate RAG training loop.** The rerank update is **across-episode (cold path)**: at goal completion the realised held-out outcome applies a batched gradient step to the rerank weights, gated like any learned weight (§8) — never on the hot path.
+
+### 16.6 Two cadences (and the determinism caveat)
+Inner `retrieve`/act runs **hot, within-episode** (over `Q`, ms, under the §16.3 cost term); outer `practice`/`commit` runs **cold, across-episode** (§6 loop, §8 gates). **Per §15.4, the within-episode *search* form applies only to replayable (deterministic / agent / code / sim) domains.** For human learning the episode is not replayable, so the inner loop degrades to **pre-step context assembly** (retrieve-then-act once, same `U_Q` objective, no replay search) — the merge holds, the search does not.
+
+**Inner-loop termination (mirrors §15.3).** The retrieve loop stops when the best remaining pull's expected gain falls below its bar — `significant(EIG_Q, SE)` fails ⇒ the answer is as resolved as retrieval can make it ⇒ **act** — or when the per-`EXPAND` retrieve budget `b_ret` is spent, or on diminishing returns (K low-gain pulls). The same "infinity bounded by information, not enumeration" rule §15.3 applies to `revisit`, applied here to `Q`: you *may* retrieve endlessly but only *will* while a pull is expected to move the answer, and *stop* when none does.
+
+### 16.7 Risks & gates
+- **Dropping z-scoring** (RC-1) → §16.3 keeps A1's `z(.)` on every term; weights are dimensionless fractions, not raw-scale knobs.
+- **Coverage-floor bypass** (RC-7) → structurally prevented: the §5.3 coverage floor governs the **outer** C-action policy; `retrieve` is **inner-loop and coverage-floor-neutral** (advances `Q`, never `C`), so a high-retrieval episode cannot erode the floor's quota of `practice` at weak skills.
+- **Retrieval / context gaming** (RC-2) → `EIG_Q` is trained against the **held-out** answer outcome (P1) with §5.2 counterfactual credit; residual: a reranker correlating with held-out item *format*. Mitigation: score the realised outcome **at the held-out item level** (compatible with leave-one-out credit) and subject the reranker weights to the same generalization gate (§8) as any learned weight.
+- **Latency blow-up** → the `cost` term + the cache store + the hot/cold split bound per-step retrieval spend.
+- **`Q`→`C` leakage** → `Q` is discarded at goal completion; only verifier-gated outcomes touch `C` (§8).
+
+### 16.8 Checks (design stubs for the companion build-spec)
+- `test_reduces_to_A1_when_no_retrieval` — inner loop disabled ⇒ `U_C` is A1 verbatim, outcomes match.
+- `test_retrieve_cannot_substitute_for_practice` — under heavy retrieval, §5.3 `f_min` coverage of weak skills is still met by outer-loop practice.
+- `test_eig_q_expected_not_realized` — `EIG_Q` at selection is computed from `Q`'s current Beta; the realised held-out outcome only updates the reranker.
+
 ---
 
-*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor (§13) → calibration (§14) → re-visiting loop (§15), all additive, 2026-06-26. The architecture never changed; the joints did, then the roles were named, the confidence made honest, and the loop made to terminate.*
+*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor (§13) → calibration (§14) → re-visiting loop (§15) → unified retrieval (§16), all additive, 2026-06-26/27. The architecture never changed; the joints did — then the roles were named, the confidence made honest, the loop made to terminate, and retrieval folded into the same value-of-information objective.*
