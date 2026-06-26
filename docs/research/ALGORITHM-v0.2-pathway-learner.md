@@ -328,4 +328,32 @@ The Tutor blends *advance* (Δcompetence) and *diagnose* (ΔH) by the uncertaint
 
 ---
 
-*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor layer (§13, additive, 2026-06-26). The architecture never changed; the joints did, then the roles were named.*
+## 14. The calibration layer — trustworthy confidence (added 2026-06-26)
+
+*Additive, like §13 — nothing in §1–§13 changes. The algorithm is uncertainty-**aware** (a posterior everywhere) but not yet **calibrated** (is "80% sure" right 80% of the time?). This layer makes the posterior's SE honest, behind the `ProbabilisticState` port, so every gate/policy that already keys off SE becomes trustworthy with zero change to it.*
+
+**The integration in one line:** calibration is a correction on **effective sample size** — the same dial as the `n_min` floor (§3), but the other direction. `n_min` *inflates* n when data is too thin; calibration *deflates* n when the model is over-confident, widening the SE to match reality.
+
+### 14.1 What the `Calibrator` computes (per skill-difficulty **band**, across learners)
+From the held-out stream it pairs each **prediction** `p̂ = E[success]` (logged at decision time) with the **realized** outcome, in a rolling window, and tracks **Expected Calibration Error (ECE)** + **Brier score** (a reliability diagram). It maintains two corrections:
+- **Probability recalibration** `g_band`: a monotone map `p̂ → p_cal` (isotonic regression / Platt / temperature scaling) — fixes systematic over/under-confidence in the *point* estimate.
+- **Uncertainty recalibration** `c_band ∈ (0,1]`: a multiplier on effective counts — when realized variance > posterior variance (over-confident), shrink `n_eff` so `SE ← SE / √c`. *(The distribution-free, guaranteed-coverage alternative: **conformal prediction** intervals.)*
+
+### 14.2 Where it plugs in (no §1–§13 mechanism changes)
+- `ProbabilisticState.estimate()` returns the **calibrated** posterior: mean via `g_band`, SE inflated by `1/√c_band`.
+- Everything downstream — `significant()` (§2), Thompson + info-gain (§3.6 / §13.1), the statistical/cumulative commit gates (§8), soft reachability — consumes the calibrated SE **automatically**. Calibration changes none of them; it makes their inputs honest.
+- **Data:** log `p̂` at decision time next to the outcome in the truth store (lineage already supports it). Calibration is **per-band** (population), not per-cell — a single learner's single cell never has enough data to calibrate; the cohort does (this is exactly C1's predictive-validity data).
+- **Cadence:** recompute `g_band`, `c_band` periodically on the cold path.
+
+### 14.3 As a safety trigger
+`ECE_band > τ_cal` trips the **circuit breaker** — a 5th trigger alongside §8's four. Acting on badly-calibrated confidence is precisely how the loop does harm *without* a competence gate firing, so miscalibration is a first-class halt condition.
+
+### 14.4 Relationship to the verifier (C1)
+Verifier reliability answers *"is the signal right?"*; calibration answers *"is my confidence in the resulting estimate right?"* — complementary. A miscalibrated verifier *produces* miscalibrated posteriors, so the calibration monitor doubles as a **downstream detector of verifier drift**.
+
+### 14.5 New parameters
+calibration window · `c_band` bounds · `τ_cal` breaker threshold · recalibration cadence. *(Formal homes: Platt scaling, isotonic/temperature recalibration, ECE/Brier, conformal prediction.)*
+
+---
+
+*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor layer (§13) → calibration layer (§14), both additive, 2026-06-26. The architecture never changed; the joints did, then the roles were named, then the confidence was made honest.*
