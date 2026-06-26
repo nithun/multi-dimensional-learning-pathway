@@ -285,4 +285,47 @@ These are the dials a Milestone-0/1 empirical pass tunes. None is guessed in the
 
 ---
 
-*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms). The architecture never changed; the joints did.*
+## 13. The Tutor layer — generic strategist + pluggable Teachers (added 2026-06-26)
+
+*An **additive** layer that sits above §1–§12 without changing any mechanism. It names what the decision core already is — a learner-agnostic **Tutor** — and adds pluggable pedagogy selected by the same held-out gate.*
+
+**Three roles, cleanly separated:**
+
+- **`Tutor` (the strategist) — generic, embedded.** The §3.6 `DecisionEngine`, elevated and renamed. It chooses the next learning action by expected learning/information gain, gated by the held-out verifier (§8). It is **learner-agnostic** and is the one piece that must be **unbiased-by-design** — act on the posterior, favour information gain, decay the past ("don't be a prisoner of past data"). One Tutor serves every learner.
+- **`LearnerAdapter` — *who* is taught.** `HumanLearnerAdapter` / `AgentLearnerAdapter`. Exposes the learner's competence posterior (§3.2) and outcome signal (§3.5) in one shape, so the Tutor is identical across humans and agents. For an **agent**, the verifier is execution/schema/task-success (§3.5). For a **human**, it is assessment **plus behavioural signals** (response time, hints used, retries) standing in where a clean execution check doesn't exist — folded into the same posterior.
+- **`TeacherAdapter` — *how* a concept is taught.** Pluggable pedagogy: generates the explanation / hint / problem / scaffold. **Deliberately NOT in the core** — domain/modality-specific and not directly verifiable in isolation (the soft-judge trap). Many Teachers may cover one skill.
+
+**The keystone move — the Tutor selects among Teachers by held-out gain.** A Teacher choice is just another `Action` (§1): its effect is measured by the same held-out competence delta and accepted/rejected by the same commit gate (§8). So pedagogy is **learned/selected, not hand-coded**, and stays **verifier-grounded** — one signal improves both the learner *and* the choice of teacher ("the tutor learns from tutoring").
+
+```mermaid
+flowchart TB
+  subgraph CORE["embedded core — generic, verifier-grounded"]
+    TUTOR["Tutor (strategist) — next action by learning / information gain"]
+    GATE["held-out commit gate (§8)"]
+  end
+  LA["LearnerAdapter: Human | Agent — competence posterior (§3.2) + outcome (§3.5)"]
+  TA["TeacherAdapter (pluggable pedagogy) — explanation / hint / problem / scaffold"]
+  TUTOR -->|picks next action AND which Teacher| TA
+  TA -->|teaching act| LA
+  LA -->|held-out outcome| GATE
+  GATE -->|keep iff held-out competence rises| TUTOR
+```
+
+**Integration map (no §1–§12 mechanism changes):**
+- `Tutor` ≡ `DecisionEngine` (§3.6) + the info-gain objective (§13.1).
+- a Teacher choice flows through EXPAND → EVALUATE → commit-gate (§6, §8) unchanged.
+- `LearnerAdapter` wraps `ProbabilisticState` (§3.2) + `EvalHarness` (§3.5); the human variant adds behavioural-signal evidence into the same posterior.
+- soft reachability, coverage floor, decay, counterfactual credit (§3–§5) are inherited verbatim.
+
+### 13.1 Information-gain mode — the bias-free objective, made explicit
+§3.6 maximises `argmax E[Δcompetence]` (advance the learner). It has a companion for when the bottleneck is **knowing the learner**, not advancing them (thin or possibly-biased data):
+
+```
+A* = argmax E[ ΔH ]      # the action that most reduces posterior ENTROPY about the learner
+```
+
+The Tutor blends *advance* (Δcompetence) and *diagnose* (ΔH) by the uncertainty the posterior already carries — high uncertainty ⇒ favour the **informative** action, not the **exploitative** one. This is Bayesian **active learning / optimal experiment design**, and it is the formal cure for "biased by past data": the Tutor acts on the open posterior (Thompson, §3.6), and when unsure deliberately picks the action that *corrects its own ignorance* rather than the one the past merely favours.
+
+---
+
+*Lineage: concept paper → v0.1 (architecture) → red-team (8 root causes) → v0.2 (hardened mechanisms) → Tutor layer (§13, additive, 2026-06-26). The architecture never changed; the joints did, then the roles were named.*
