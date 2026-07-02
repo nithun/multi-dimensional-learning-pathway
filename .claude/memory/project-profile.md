@@ -44,7 +44,7 @@ _Last profiled: 2026-07-02 by scout (deep pass; supersedes the 2026-06-22 in-ses
 - Longer arc: M1 capability suite → M2 weight axis → M3 self-modification/fleet; paper with pre-registered evaluation protocol. [verified]
 
 ## Open questions for the user
-- **Library housing contradiction:** RELEASE-PLAN §3 [D-2] says author `mdlp/` **in this repo**; HANDOVER-v2 §3 (committed 2026-06-26) locks housing as "stays in `turing-agents/mdlp`". The 2026-07-01 direction favors this-repo, and the scope rule forbids touching turing-agents from here — but HANDOVER-v2 §3/§9/§10 still point builders at turing-agents. Needs one authoritative answer + a HANDOVER-v2 amendment.
+- ~~Library housing contradiction~~ **RESOLVED by the user (2026-07-02):** `/Users/samyoga/dev/turing-agents` is the user's **own research implementation** — they build there themselves; nothing in that repo is ever modified from here. HANDOVER-v2 §3's resolution of [D-2] toward turing-agents stands (the v2 artifact is cut there, by the user). This repo's job is the research/specs; any information the implementation needs is **passed manually by the user** — never written across by an agent.
 - [D-1] confirmation: CHANGELOG split + VERSION handling when Python lands here.
 - §19 spec edit is approved-but-uncommitted alongside unrelated working-tree changes — when/how does the authorized commit land?
-- Who implements Phase A here? No Python specialists (`pathway-builder`, `eval-harness-builder`) exist in this repo's agent roster — HANDOVER-v2 §9 assumed turing-agents ones.
+- ~~Who implements Phase A here?~~ **RESOLVED (2026-07-02):** the user implements Phase A themselves in turing-agents; this repo needs no Python build specialists for it.
