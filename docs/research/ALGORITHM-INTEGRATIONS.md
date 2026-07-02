@@ -29,6 +29,7 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 | Learning | Status | Integration point |
 |---|---|---|
 | Held-out split + generalization + cumulative gates | ✅ | §4, §8 |
+| **Self-calibrating gate** — the §8 thresholds *learn* from post-commit regression (per-clause attribution: `z`/`ρ_gen`/`ε_cum`), each clamped stricter-than-§8, never looser; lives in JUDGE (§17.1) | ✅ ▣ | §19 · gate-approved (review-360 85/100, 3 rounds → change-approver) |
 | **Human-learning verifier** — held-out assessment + IRT/guessing + isomorphic variants + predictive-validity admission | 🆕 | `HUMAN-LEARNING-VERIFIER.md` + `HUMAN-LEARNING-M0-PROTOCOL.md` (C1: design + go/no-go protocol) |
 | **Negative evidence is information** — a failed eval/loop narrows the candidate space; store the narrowing | 🆕 | §15 *(from Source Code)* |
 
@@ -68,7 +69,7 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 ---
 
 ## What's actually built vs. pending
-- **✅ In v0.2 now:** dual-posterior state + `significant()` (§2–3), the eval/gates (§4, §8), the data layer (§10), the **Tutor layer** (§13), the **calibration layer** (§14), the **re-visiting loop** (§15), **unified retrieval / 5-store RAG** (§16).
+- **✅ In v0.2 now:** dual-posterior state + `significant()` (§2–3), the eval/gates (§4, §8), the data layer (§10), the **Tutor layer** (§13), the **calibration layer** (§14), the **re-visiting loop** (§15), **unified retrieval / 5-store RAG** (§16), the **self-calibrating gate** (§19).
 - **▣ Gate-approved design, future milestones:** **self-modification axis** (§17) + **multi-agent populations** (§18) — review-360 → change-approver APPROVED; target **M3** (after the M2 weight axis).
 - **▣ Gate-approved build-specs** ([`BUILD-SPECS.md`](BUILD-SPECS.md), each cleared review-360 >80 → change-approver APPROVED): info-gain selection (A1, 85), warm-start (A5, 82), forgetting-aware spacing (B4, 82), misconception clustering (B1, 82), prereq-gap diagnosis (B2, 83), fleet transfer (B3, 82). Implementable specs with tests; **not yet code**.
 - **🆕 Still design-only (not spec'd):** behavioural likelihood + human verifier (C1 — design + M0 protocol done; **domain chosen: Frappe custom-app dev + ERPNext implementation**, instrument instantiated in [`HUMAN-LEARNING-M0-FRAPPE.md`](HUMAN-LEARNING-M0-FRAPPE.md); awaits a cohort + item bank + assertion suites to run).
