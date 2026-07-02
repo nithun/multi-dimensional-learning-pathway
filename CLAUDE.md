@@ -6,7 +6,7 @@ Two layers work together:
 - **Self-evolving layer** — the framework learns from every interaction and edits itself (sharper skills, new agents, recorded lessons).
 - **Teammates layer** — agents are assignable teammates with a task lifecycle, a squad leader that delegates, autopilots (recurring routines), and a per-agent audit log. (Adapted from Multica AI, file-native — no platform required.)
 
-Generalized from a proven, in-production self-evolving setup (the TAP LMS project) and the managed-agents model of Multica AI.
+Generalized from Turing's own proven, in-production self-evolving agent setup, and the managed-agents model of Multica AI.
 
 ## The one idea
 

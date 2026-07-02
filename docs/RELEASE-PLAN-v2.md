@@ -11,7 +11,7 @@
 | | |
 |---|---|
 | **Is** | The MDLP algorithm, specified and **reference-implemented for the agent side (Milestone-0)**, packaged `pip install mdlp`-able, with the 5-store data layer (embedded tier), the paper, and a refreshed site. |
-| **Is not** | A finished human-ed product, the TAP LMS PAL layer, the weight axis (M2, needs GPU), or a validated human verifier (C1 needs a cohort). Those ship as **design + roadmap**, clearly labelled. |
+| **Is not** | A finished human-ed product, the human-facing personalized-adaptive-learning (PAL) layer, the weight axis (M2, needs GPU), or a validated human verifier (C1 needs a cohort). Those ship as **design + roadmap**, clearly labelled. |
 
 The honest one-liner: **v2 makes the approved specs real and runnable on one verifiable domain, and ships everything else as documented design.** This matches the project's own discipline (MVP, prove-on-one-real-task, evidence over momentum).
 
@@ -111,7 +111,7 @@ M1/M2 (validating Tier ②, building the weight axis) are **explicitly post-v2**
 - **Risk: M0 doesn't pass** → mitigated by treating a NO-GO as a *valid, publishable* release outcome (it bounds where the approach applies). The release does not depend on a positive result.
 - **Risk: scope creep into Tier ② validation** → mitigated by the hard cut line in §4 (experimental = shipped unvalidated, by design).
 - **Risk: re-implementing turing-agents work** → the prior build is reference-only; we author fresh in-repo. Some divergence is acceptable and in-scope.
-- **Non-goals for v2:** the C1 human verifier beyond a roadmap **tag** (the Frappe/ERPNext instantiation is deferred — too much for v2), M2 weight axis (needs GPU), TAP LMS PAL integration, PyPI publish (deferred to v2.1).
+- **Non-goals for v2:** the C1 human verifier beyond a roadmap **tag** (the Frappe/ERPNext instantiation is deferred — too much for v2), M2 weight axis (needs GPU), the human-facing PAL-layer integration, PyPI publish (deferred to v2.1).
 
 ## 10. Sequenced task board (proposed)
 

@@ -41,7 +41,7 @@ If you're here to understand *how the agents work* rather than the research, sta
 - [`WORKFLOW.md`](WORKFLOW.md) — task-type → path map.
 - [`EVOLUTION-LOG.md`](EVOLUTION-LOG.md) — plain-language log of everything the framework has learned.
 
-The framework is MIT-licensed and generalized from a proven in-production setup (TAP LMS) and the managed-agents model of [Multica AI](https://github.com/multica-ai/multica).
+The framework is MIT-licensed and generalized from Turing's own proven in-production setup and the managed-agents model of [Multica AI](https://github.com/multica-ai/multica).
 
 ## Repository layout
 
