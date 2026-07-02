@@ -40,6 +40,10 @@
       field, and selects every next action to maximize <b>expected learning gain</b> — not immediate
       success — measured by a real held-out verifier.
     </p>
+    <div class="chips" style="margin-top:14px">
+      <span class="chip ok">Milestone-0: GO — held-out 0.495 vs 0.025 baseline (+0.47), live model, 2026-07-01</span>
+      <span class="chip ok">Milestone-1 mechanisms live-confirmed · 2026-07-02</span>
+    </div>
     <div class="cta">
       <a class="btn btn-primary" href="#features">Explore the features →</a>
       <a class="btn btn-ghost" href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">Read the paper</a>
@@ -123,6 +127,19 @@
       <b>Two principles</b> run through every component: <b>measurement independence</b> (decide on data the
       learner never optimized against — held-out evals, counterfactual credit, cumulative baselines) and
       <b>reversible openness</b> (every <code class="inline">add</code> has an inverse).
+    </div>
+    <div class="callout" style="margin-top:14px">
+      <b>First live result (pre-registered M0, 2026-07-01): GO.</b> With a live model in the loop
+      (920 calls, zero errors) on an unseen knowledge-bottleneck skill, held-out competence reached
+      <b>0.495</b> under the learning loop vs <b>0.025</b> under a frozen no-learning baseline — a
+      <b>+0.47</b> margin, paired-gated at z = 2, with memorization/hard-coding probes failing as designed,
+      and selection running through the learning-gain policy (not a fixed rotation). Milestone-1 mechanisms
+      — growth provisioning, spacing (full SRS curve), warm-start, prerequisite-gap diagnosis, revisit
+      triggers — were additionally confirmed operating end-to-end live (2026-07-02). Honest scope: an
+      <em>existence</em> result — one skill, one run, a verifier-friendly domain; the representative
+      coding + pytest corpus is the next execution of the protocol (<a
+      href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md"
+      target="_blank" rel="noopener">paper §5.9</a>).
     </div>
   </div>
 </section>
@@ -217,10 +234,10 @@
         <p>The verifier is cheap and reliable: a code change → run <code class="inline">pytest</code> on held-out tests → pass/fail. Schema and task-success checks play the same role. Thousands of evals, near-zero label noise.</p>
         <ul class="tight">
           <li>outcome = execution / schema / task success</li>
-          <li>Milestone-0 domain: coding tasks with held-out tests</li>
+          <li>first M0 GO measured on a knowledge-bottleneck corpus; representative coding-with-held-out-tests corpus is the next protocol run</li>
           <li>fleet transfer (B3) compounds mastery across agents</li>
         </ul>
-        <div class="chips"><span class="chip ok">v2 focus</span></div>
+        <div class="chips"><span class="chip ok">v2 focus · M0 GO (live)</span></div>
       </div>
       <div class="card">
         <div class="k">human learner</div>
@@ -268,6 +285,9 @@
       <b>All six capabilities cleared it</b> (82–85/100), several only after multiple revision rounds.
       The full audit trail — every review and decision record — lives in
       <a href="https://github.com/nithun/multi-dimensional-learning-pathway/tree/main/docs/research/reviews" target="_blank" rel="noopener"><code class="inline">docs/research/reviews/</code></a>.
+      The same discipline held at run time: a fresh adversarial review of the implementation ran <em>before</em>
+      the live Milestone-1 spend and caught two defects that would have silently nulled two components — fixed
+      first, then validated live.
     </div>
   </div>
 </section>
@@ -466,7 +486,7 @@ rebuild_all(stores.truth, stores)   # state + graph rebuilt from the event log</
     <h2>Paper &amp; design</h2>
     <p class="sub">The full research chain — every prior-art claim primary-source verified, the design adversarially hardened, the build-specs gate-approved.</p>
     <div class="grid grid-2">
-      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">The paper →</a></h3><p>Method, related work, and a pre-registered evaluation protocol (baselines, ablations, metrics).</p></div>
+      <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/PAPER.md" target="_blank" rel="noopener">The paper →</a></h3><p>Method, related work, and a pre-registered evaluation protocol (baselines, ablations, metrics) — with the first executed milestone (M0: GO) reported in §5.9.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-v0.2-pathway-learner.md" target="_blank" rel="noopener">Algorithm v0.2 →</a></h3><p>The hardened spec (§1–§15): gate primitive, growth provisioning, soft reachability, Tutor, calibration, re-visiting.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/BUILD-SPECS.md" target="_blank" rel="noopener">Build specs →</a></h3><p>The six gate-approved capabilities (A1, A5, B1–B4) as implementable code-with-tests, each with its review record.</p></div>
       <div class="card link-card"><h3><a href="https://github.com/nithun/multi-dimensional-learning-pathway/blob/main/docs/research/ALGORITHM-INTEGRATIONS.md" target="_blank" rel="noopener">Integration register →</a></h3><p>Every brainstorm learning mapped to its landing point in the algorithm — the single source of truth for what's built vs. pending.</p></div>
