@@ -21,6 +21,11 @@ Tracked threads from the "5-store for learning pathways" brainstorm and the bias
 ## D · Strategy
 - ○ **D1 — The flagship decision (owner's call):** human-ed app vs deepen the agent engine vs the unified "every learner is a learner" platform.
 - ○ **D2 — Positioning note** vs Self-Evolving Curriculum + Bayesian active learning / optimal experiment design (the formal lineage of the info-gain Tutor).
+- ○ **D3 — M2 compute path (owner's call, decision deferred until its trigger fires; recorded 2026-07-02).** The weight axis does **not** require owning a GPU — three options, to be picked only when the trigger condition is met:
+  1. **Hosted fine-tune API** (Together / Fireworks / OpenAI tuning / Bedrock): curriculum data in, tuned model out; GPU is behind someone else's API; per-job cost ≈ $tens; §9 two-stage promotion unchanged (train → held-out eval → promote/rollback). *Try this first.*
+  2. **Rented burst GPU** (RunPod/Lambda/Modal spot): local LoRA control, open-weights student (Qwen/Llama-class); per-campaign $tens–$100s SFT, $100s–1000s RL. Only if (1) proves too constraining.
+  3. **Skip the weight axis entirely**: memory-axis (LLM-call) learning may capture most of the gain (Voyager/DSPy precedent); a fine outcome by design.
+  **Trigger to decide:** memory-axis held-out gains plateau *while* the verifier is strong (M2's own precondition). **Constraint that quietly decides it:** if the student model is Claude, general fine-tuning is unavailable → weight axis needs an open-weights/tunable student, or option 3. **No full-time GPU in any path** — bursts per promotion cycle; a standing GPU only enters if self-hosting inference of a tuned student (deployment choice, deferrable). M0/M1/v2 need zero GPU (API calls only).
 
 ## Recommended sequence
 1. **C1** (human-learning verifier) — go/no-go for the whole human-ed direction; same discipline as the agent side (solve the signal before building on it). *(started)*
