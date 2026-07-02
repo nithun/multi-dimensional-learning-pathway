@@ -4,6 +4,10 @@
 
 **Status:** PLAN (not started). Owner decisions flagged inline as **[D-n]**. Scope rule honored: the library is authored **in this repo**; the turing-agents copy is never touched.
 
+> **STATUS UPDATE — 2026-07-02.** Two facts have moved since this plan was written:
+> 1. **The §7 hard gate is CLEARED in the reference implementation:** real M0 GO on live Claude (held-out 0.495 vs baseline 0.025, margin +0.47, powered, artifact `b7-a33f906-n15x10-r1.json`, TA SHA `a33f906`, 2026-07-01), and M1 live validation complete (2026-07-02, TA `c210565`) — growth, B4, A5, §15 (both triggers), B2 all confirmed live. §9's "Risk: M0 doesn't pass" is retired; Tier ① is validated in the reference build, and several Tier ② capabilities are live-confirmed rather than merely unit-tested (§16 remains hermetic-only).
+> 2. **[D-2] housing was resolved by the owner (2026-07-02), superseding the header line above:** the v2 artifact is cut from **turing-agents by the owner** (per `HANDOVER-v2.md` §3); this repo ships the research (spec, BUILD-SPECS, paper, site). Plan items below that assume authoring `mdlp/` in this repo are subject to that resolution.
+
 ---
 
 ## 1. Release thesis (what v2 *is* and is not)

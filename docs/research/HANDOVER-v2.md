@@ -2,7 +2,7 @@
 
 **For:** the turing-agents build team (Claude Code build agents + `@you`)
 **Mode:** build — the research + specs are done and gate-approved; this is implementation toward the **v2 release**
-**From:** the MDLP research project · **Date:** 2026-06-26 · **Status:** open at **Phase A (make M0 real)** — the inherited gate is still unmet
+**From:** the MDLP research project · **Date:** 2026-06-26 · **Status:** ~~open at Phase A~~ → **UPDATED 2026-07-02: Phase A CLEARED (real M0 GO, 2026-07-01); M1 live validation COMPLETE (2026-07-02)** — see the dated update at the top of §1
 **Supersedes:** [`HANDOVER.md`](HANDOVER.md) (v1) and folds in [`IMPROVEMENT-NOTE-turing-agents.md`](IMPROVEMENT-NOTE-turing-agents.md). Both remain as historical record.
 **Scope rule:** this doc lives in the MDLP repo; the turing-agents repo is managed separately. File/line refs point into `turing-agents/mdlp/`; board IDs into `turing-agents/tasks/BOARD.md`. Act on it there — nothing here edits turing-agents.
 
@@ -16,7 +16,15 @@ v1 built and unit-tested the v0.2 **machinery** in `turing-agents/mdlp`. v2 turn
 
 ## 1. Honest status — read this before anything (the reframe)
 
-The single most important fact for v2: **M0 is not actually passed.** Per [`IMPLEMENTATION-REVIEW.md`](IMPLEMENTATION-REVIEW.md) + the improvement note, the build is a faithful, well-tested implementation of the v0.2 *machinery*, but **no result yet shows real learning**:
+> **STATUS UPDATE — 2026-07-02 (supersedes the framing below; the original text is kept as historical record).**
+> All three gaps in the table below were closed in turing-agents, and the inherited gate **passed for real**:
+> - **M0 REAL GO (2026-07-01, C0-hardened):** live `ClaudeRunner` on a real corpus — held-out **0.495** vs no-learning baseline **0.025**, margin **+0.47**, powered (n_held=15 × 10 ticks, 920 live calls, 0 errors), paired-gated at z=2, memorization/hard-code probes held. Artifact `b7-a33f906-n15x10-r1.json`, TA SHA `a33f906`. (Two 2026-06-29 runs were invalidated by an auth bug and *not* counted.)
+> - **DecisionEngine wired:** round-robin removed; live loop selects via Thompson-sampled learning progress + coverage floor.
+> - **M1 LIVE VALIDATION COMPLETE (2026-07-02, TA `c210565`):** growth/provision_suite, B4 spacing (full SRS curve), A5 warm-start (exact spec formulas, measurable head-start), §15 spacing-due + downstream-failure, and B2 prereq-gap diagnosis all fired on real Claude. A pre-spend C0-M1 adversarial review caught 2 DOA blockers first (T-052 §16 EIG-unit gate, T-053 §15 same-tick bug; also T-054 B2 depth cap) — fixed before the live runs.
+> - **Still hermetic-only:** §16 retrieval live (needs a multi-store corpus), B1 in the live loop, merge/prune live, A5 `div` scaling, B4 self-check as decision-maker. M0 scope: single knowledge-bottleneck skill (cipher); the representative coding+pytest corpus remains ahead.
+> **Consequence:** Phase A and the core of Phase B are done; the open work is Phase C (release) + the representative corpus. Housing per the owner (2026-07-02): the v2 artifact is cut in turing-agents by the owner; this repo ships the research.
+
+The single most important fact for v2 *(as of 2026-06-26 — superseded above)*: **M0 is not actually passed.** Per [`IMPLEMENTATION-REVIEW.md`](IMPLEMENTATION-REVIEW.md) + the improvement note, the build is a faithful, well-tested implementation of the v0.2 *machinery*, but **no result yet shows real learning**:
 
 | What looks done | The reality |
 |---|---|
