@@ -1,83 +1,63 @@
-# Multi-Dimensional Learning Pathway
+# Multi-Dimensional Learning Pathway (MDLP)
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**An AI/agent research project exploring multi-dimensional learning pathways — built on a self-evolving agent framework.**
+**A probabilistic, verifier-grounded, open-ended framework for self-improving learners — software agents *and* humans — that selects every next learning action to maximize expected learning gain, measured on held-out evidence the learner never optimized against.**
 
-> **Status: early-stage / bootstrapping.** The research direction below is the framing, not a finished result. Specifics (methods, models, findings) firm up as the work happens, and this README grows with them. The repo currently holds the agent scaffold the research runs on — project-specific code and write-ups land here as they're produced.
+> **Status (2026-07-02):** the algorithm is **spec-complete and gate-approved** (v0.2, §1–§19), and the first pre-registered milestone has been **executed and passed**: Milestone-0 returned **GO** with a live model in the loop — held-out competence **0.495 vs 0.025** no-learning baseline (**+0.47**), memorization probes failing as designed (2026-07-01). Milestone-1 mechanisms (growth, spacing, warm-start, prerequisite-gap diagnosis, revisit triggers) are live-confirmed (2026-07-02). Honest framing: an **existence result** — one skill, one run, a verifier-friendly domain — not yet a generality claim. See the [paper §5.9](docs/research/PAPER.md) and the [project site](https://nithun.github.io/multi-dimensional-learning-pathway/).
 
 ---
 
-## What this is
+## The idea
 
-A research project investigating **multi-dimensional learning pathways** — how learning can be modeled, navigated, and adapted across several dimensions at once (rather than a single linear track) — using AI agents as both the subject and the tooling.
+Personalized-learning systems and self-improving agents face the same control problem: *from the learner's current state, which next learning action most improves it?* MDLP answers it probabilistically and openly:
 
-It's deliberately exploratory. Rather than committing up front to one architecture, the project uses a **self-evolving agent layer** that profiles the work, records what's learned, and grows its own specialist agents and playbooks as the research takes shape. The substrate is meant to compound: every experiment leaves the toolchain a little sharper for the next one.
+- **A real state model.** Competence is a dual Beta posterior per *skill × difficulty* (slow-decay mastery, fast-decay drift) — not a deterministic label.
+- **The corrected objective.** Greedy `argmax P(success)` picks the already-mastered action and learns nothing. MDLP maximizes `E[Δ competence]` — the learning-progress frontier.
+- **Verifier-grounded.** Every reward comes from a real verifier on **held-out** items (code execution, schema checks, task success). Skills without a reliable verifier stay out of the autonomous loop — stated as the framework's binding precondition, not hidden.
+- **Two load-bearing principles.** **P1 — measurement independence:** every quantity that drives a decision is estimated on data the learner's optimization never touched. **P2 — reversible openness:** the schema grows from data, but every `add` has an inverse (merge, prune, decay, rollback).
 
-## Research focus
+One decision core serves both learner types through a `LearnerAdapter`: an agent's oracle is execution; a human's is held-out assessment (IRT-3PL + behavioural signals — designed, roadmap-stage).
 
-Open questions this project is organized around (these will be refined as the work proceeds):
+## The research corpus (`docs/research/`)
 
-- **Dimensions** — what are the meaningful axes of a learning pathway (e.g. skill, depth, modality, prerequisite structure, time), and how do they interact?
-- **Navigation** — how does an agent (or a learner) move through a multi-dimensional space without collapsing it back into a single line?
-- **Adaptation** — how does a pathway re-shape itself in response to progress, gaps, and feedback?
-- **Agents as method** — where do autonomous agents help (mapping the space, proposing routes, evaluating progress), and where do they get in the way?
+| Document | What it is |
+|---|---|
+| [`ALGORITHM-v0.2-pathway-learner.md`](docs/research/ALGORITHM-v0.2-pathway-learner.md) | **The spec of record** — §1–§19: state model, statistical gates, eval harness, growth/validity/frontier meta-functions, Tutor, calibration, re-visiting, unified retrieval, self-modification (SOLVE/JUDGE), multi-agent fleets, self-calibrating gate. All additions additive, all gate-approved. |
+| [`BUILD-SPECS.md`](docs/research/BUILD-SPECS.md) | Six implementable capability specs, each formally approved (82–85/100): info-gain selection (A1), warm-start (A5), misconception clustering (B1), prereq-gap diagnosis (B2), fleet transfer (B3), forgetting-aware spacing (B4). |
+| [`PAPER.md`](docs/research/PAPER.md) | The paper: method, related work, a **pre-registered evaluation protocol**, and the first executed milestone (M0: GO) in §5.9. |
+| [`ALGORITHM-v0.1-redteam.md`](docs/research/ALGORITHM-v0.1-redteam.md) | The adversarial pressure-test that shaped v0.2 — ~40 findings, 8 root causes, 3 pilot-killers found *before* anything ran. |
+| [`DATA-LAYER.md`](docs/research/DATA-LAYER.md) | The 5-store substrate (truth / state / vector / graph / cache, + artifacts) — embedded zero-infra default, pluggable full tier. |
+| [`HUMAN-LEARNING-VERIFIER.md`](docs/research/HUMAN-LEARNING-VERIFIER.md) + [M0 protocol](docs/research/HUMAN-LEARNING-M0-PROTOCOL.md) | The human-side go/no-go (C1): design-complete, pre-registered, awaiting a cohort. Roadmap, not a current deliverable. |
+| [`reviews/`](docs/research/reviews/) | The full audit trail: every capability and spec section passed a two-stage **review-360 → change-approver** gate; these are the review and decision records. |
+| [`RELEASE-PLAN-v2.md`](docs/RELEASE-PLAN-v2.md) + [`HANDOVER-v2.md`](docs/research/HANDOVER-v2.md) | The v2 release plan (maturity tiers, the M0 hard gate — now cleared) and the implementation handover with dated status. |
 
-Findings, experiments, and design notes will be written up under `docs/` as they're produced.
+## Results so far
+
+- **M0 (does it learn at all?): GO** — live model in the loop, 920 calls, zero runner errors, n_held=15 × 10 ticks, paired-gated at z=2; selection ran through the learning-gain policy (Thompson-sampled learning progress + coverage floor), not a fixed rotation. Two earlier runs invalidated by an infrastructure fault were discarded, not counted.
+- **M1 (mechanisms live):** growth provisioning, spacing (full SRS curve), warm-start (exact spec formulas, measurable head-start), prerequisite-gap diagnosis (correctly naming the weak *root* skill), and both revisit triggers — all confirmed operating end-to-end live. Wiring validation at small n, deliberately not reported as powered margins.
+- **Process result:** a pre-spend adversarial review caught two defects that would have silently nulled two components — fixed before the live runs. The review-before-spend discipline is part of the method.
+
+**Next protocol runs:** a representative coding + held-out-pytest corpus (the generality test), powered M1 hypotheses, then M2 (the weight/fine-tuning axis) and M3 (self-modification, fleets) — both gate-approved as designs.
+
+The reference implementation lives in a separate research build maintained by the project owner; this repository is the home of the research — spec, specs, paper, protocol, and audit trail.
 
 ## Built on Turing Agents
 
-The agent layer in this repo is the **Turing Agents** framework (v0.2.0) — a generic, self-evolving Claude agent scaffold for Claude Cowork + Claude Code. It starts almost empty and grows the specific agents, skills, and memory this project needs from real work.
-
-In short:
-
-- **It learns the project.** A `curator` watches every working session, profiles the repo, and records lessons — you don't trigger profiling or evolution by hand.
-- **It runs agents as a team.** Agents are teammates you assign work to via a task board (`tasks/BOARD.md`), with a squad leader (`dispatcher`) that routes work to specialists.
-- **Every self-edit is a git commit** (`evolve: …`), so anything the framework changes about itself can be reverted.
-
-If you're here to understand *how the agents work* rather than the research, start with:
-
-- [`CLAUDE.md`](CLAUDE.md) — the operating loop and protocols (read first).
-- [`WORKFLOW.md`](WORKFLOW.md) — task-type → path map.
-- [`EVOLUTION-LOG.md`](EVOLUTION-LOG.md) — plain-language log of everything the framework has learned.
-
-The framework is MIT-licensed and generalized from Turing's own proven in-production setup and the managed-agents model of [Multica AI](https://github.com/multica-ai/multica).
+The working substrate of this repo is **Turing Agents** — a self-evolving Claude agent scaffold (Claude Cowork + Claude Code) that grows the agents, skills, and memory the project needs from real work. It reviewed this project's own specs: the two-stage approval gate above is run by agents the framework evolved for the purpose. Start with [`CLAUDE.md`](CLAUDE.md) for the operating loop, and [`EVOLUTION-LOG.md`](EVOLUTION-LOG.md) for what the framework has learned. The framework is MIT-licensed and generalized from Turing's own proven in-production setup and the managed-agents model of [Multica AI](https://github.com/multica-ai/multica).
 
 ## Repository layout
 
 ```
-CLAUDE.md                     the agent operating loop + protocols (read first)
-WORKFLOW.md                   task-type → path map
-.claude/
-  agents/*.md                 the self-evolving agent squad
-  memory/                     project profile, lessons, patterns, glossary, logs
-  squads.md                   squad registry (task type → teammate)
-  settings.json               SessionStart hook → loads framework state each session
-tasks/BOARD.md                the team kanban board (assign work to agents)
-autopilots/                   recurring routines (weekly retrospective, …)
-skills/                       on-demand playbooks (grown as needed)
-docs/                         research notes, design studies, evolution reports
+docs/research/                the research corpus (spec · build-specs · paper · reviews · handover)
+docs/RELEASE-PLAN-v2.md       the v2 release plan (tiers, gates, cut line)
+docs/index.html               the project site (GitHub Pages)
+CLAUDE.md                     the agent operating loop + protocols
+.claude/agents|memory/        the self-evolving agent squad + its memory
+tasks/BOARD.md                the team kanban board
 scripts/                      framework tooling (capture · orient · evolve · task · …)
 EVOLUTION-LOG.md              plain-language digest of what the framework learned
 ```
-
-## Getting started
-
-This repo is already initialized — no template reset needed. To work on it:
-
-```bash
-# clone
-git clone https://github.com/nithun/multi-dimensional-learning-pathway.git
-cd multi-dimensional-learning-pathway
-
-# open a Claude Code / Cowork session in this folder and start working.
-# the framework auto-profiles on first real work and learns as you go.
-
-# (optional) always-on background evolution, even while you're away:
-scripts/install.sh --daemon
-```
-
-Requirements: macOS (for the launchd daemon; the rest is portable), `git`, and the `claude` CLI (Claude Cowork / Claude Code). The framework itself is just Markdown + Bash — no other dependencies.
 
 ## License
 
