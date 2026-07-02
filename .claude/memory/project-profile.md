@@ -46,5 +46,6 @@ _Last profiled: 2026-07-02 by scout (deep pass; supersedes the 2026-06-22 in-ses
 ## Open questions for the user
 - ~~Library housing contradiction~~ **RESOLVED by the user (2026-07-02):** `/Users/samyoga/dev/turing-agents` is the user's **own research implementation** — they build there themselves; nothing in that repo is ever modified from here. HANDOVER-v2 §3's resolution of [D-2] toward turing-agents stands (the v2 artifact is cut there, by the user). This repo's job is the research/specs; any information the implementation needs is **passed manually by the user** — never written across by an agent.
 - [D-1] confirmation: CHANGELOG split + VERSION handling when Python lands here.
+- **M2 compute path (NEXT-STEPS D3, recorded 2026-07-02):** hosted fine-tune API vs rented burst GPU vs skip weight axis. Deferred until trigger: memory-axis held-out gains plateau while verifier is strong. No GPU needed through v2 (M0/M1 = API calls only); no path requires a full-time GPU. Claude-as-student ⇒ no general fine-tuning ⇒ open-weights student or skip.
 - §19 spec edit is approved-but-uncommitted alongside unrelated working-tree changes — when/how does the authorized commit land?
 - ~~Who implements Phase A here?~~ **RESOLVED (2026-07-02):** the user implements Phase A themselves in turing-agents; this repo needs no Python build specialists for it.
