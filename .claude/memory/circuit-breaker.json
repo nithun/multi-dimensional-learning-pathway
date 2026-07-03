@@ -2,9 +2,9 @@
   "_doc": "Safety state machine for self-edits. A non-open lane makes edits in that lane proposals, not direct writes. Only the user reopens a closed lane.",
   "mode": "aggressive",
   "thresholds": { "revert_or_ineffective_pause_after_n": 2, "rolling_window_edits": 5 },
-  "skills": { "status": "open", "recent_outcomes": ["pending:spec-change-gate-proposal-2026-07-02"] },
+  "skills": { "status": "open", "recent_outcomes": ["pending:spec-change-gate-proposal-2026-07-02", "still-blocked:no-spawn-tool-2026-07-03"] },
   "agents": { "status": "open", "recent_outcomes": ["effective:EV-1-review-360-2026-07-02-audit", "effective:EV-1-change-approver-2026-07-02-audit"] },
-  "memory": { "status": "open", "recent_outcomes": ["effective:EV-36-scout-reprofile-2026-07-02-audit"] },
-  "last_run": "2026-07-02",
-  "last_updated": "2026-07-02T00:00:00Z"
+  "memory": { "status": "open", "recent_outcomes": ["effective:EV-36-scout-reprofile-2026-07-02-audit", "neutral:EV-39-L010-2026-07-03-audit", "neutral:EV-40-L011-2026-07-03-audit"] },
+  "last_run": "2026-07-03",
+  "last_updated": "2026-07-03T00:00:00Z"
 }
