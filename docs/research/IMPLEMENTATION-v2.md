@@ -336,6 +336,19 @@ Resolve these before coding the relevant module (they were recorded as non-block
 
 ---
 
+## 20. Library engineering advisories (from the 2026-07-13 external study)
+
+Adopted patterns from `STUDY-raganything-agentscope-openspace.md` (P5) — advisories for the `mdlp` build, not spec changes; each is the shipped practice of a mature framework in the adjacent space (AgentScope 2.0 unless noted):
+
+1. **Nested optional extras.** Composite extras reference the atomic ones (`mdlp[full] = ["mdlp[postgres]", "mdlp[qdrant]", …]`) so tiers compose without duplication — the §7 DATA-LAYER extras, expressed the way AgentScope's `pyproject` does it.
+2. **One serializable root-state model, two write cadences.** All persistable learner state hangs off one dataclass/Pydantic root (posteriors, curriculum state, schedules) → free dump/validate/version; expose a cheap hot-path "posteriors-only" write distinct from the full snapshot (their `update_session_state` vs `upsert_session` split) — maps to the StateStore-warm vs TruthStore-cold cadence in §14/DATA-LAYER.
+3. **Durable store ≠ live bus (§18).** Keep the fleet's durable skill/competence store (ports, DATA-LAYER §2) and any live coordination channel as **separate interfaces** — never couple the posterior store to the sharing transport. Matches §18.2's cached fleet-projection design; AgentScope's storage-ABC/message-bus split is the reference.
+4. **Judge verdicts are schema-validated objects.** Any LLM-judge step (Tutor teachers, analyzers) returns a validated structured verdict (`passed, evidence, effect_size, confidence`), composing with — never replacing — `significant()` and the §8 gates.
+5. **Validate retrieved references against the store** before context assembly (LLM selectors hallucinate ids; AgentScope filters selections against the real file set). This is spec-level in the R1 build-spec item (BUILD-SPECS, in gate); at the library level it is one guard function shared by all retrieval paths.
+6. **Defensive schema evolution for persisted records** (RAG-Anything's compat shim): adding a field to a persisted record must not break older embedded DBs — write-with-fallback, version-stamp records (`cache_version`-style), and keep `rebuild.py` as the migration of last resort.
+
+---
+
 ## Appendix — parameter register (all dials, §12 + added)
 
 Core (§12): `γ_slow, γ_fast, n_min, z, ε, ε_cum, ρ_gen, ρ_min, τ_new, τ_merge, θ, λ, f_min, topK, m, l1_decay, (α0,β0), promotion bar, interference tol, K (breaker), k (LP window)`.
