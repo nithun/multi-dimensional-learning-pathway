@@ -210,6 +210,56 @@ A `Diagnose` component over `GraphStore` (backward walk) + `ProbabilisticState` 
 ### Review notes (review-360 round 1: 68 → re-gating)
 Round-1 fixed: (1) descent is **branch-local + `significant(θ−ĉ, SE)`** (not a global layer, not a point compare — RC-1); (2) added the **post-redirect outcome-feedback loop** (`g.decay_edges`) + the honest admission that confirmation *reduces but can't eliminate* causal confounding. The integrity hinge is **confirm before redirect + verify the redirect helped**. Depends on graph + posterior + eval; composes with B1.
 
+### Amendment A (2026-07-13) · typed hierarchy edges + derived traversal order  ▣ APPROVED (review-360 85/100 over 8 rounds · change-approver APPROVED — `reviews/B2-amendA-typed-edges-decision.md`)
+
+*Additive delta to the approved B2. Provenance: the composite/constituent edge type and the hard-vs-soft dependency distinction are working patterns in the closest open analogues (RAG-Anything's `belongs_to` hierarchy; OpenSpace's `critical_tools` vs soft deps — `STUDY-raganything-agentscope-openspace.md` P6); the same study's cautionary finding — hardcoded traversal bias fossilizes — governs every rule below, including this amendment's own (round 1 caught the type-precedence rule violating it; removed).*
+
+- **Edge types + schema.** The graph carries two prerequisite-like edge types:
+  ```
+  Edge{ src, dst, type ∈ {prereq, part_of}, weight, confidence, hard: bool, provenance }
+  ```
+  `prereq` is the existing learned dependency; **`part_of`** links a composite skill to a constituent (decomposition). **Field roles, disambiguated (corrected r3):** `confidence` is the *edge-existence belief* — it drives traversal order and is what `g.decay_edges()` decays. `weight` is **RESERVED: no approved mechanism consumes it** — §5.2's `reach_weight(s,n) = ∏ P(mastery[p] ≥ θ)` is a pure posterior product with no edge-weight term (round 2 caught this amendment citing it falsely), and per the no-static-bias rule `weight` is excluded from traversal; it stays in the schema solely for backward compatibility, and **consuming it anywhere requires a gated spec change**. `part_of` edges carry the same schema. *(Schema delta to DATA-LAYER §5 ships with this amendment: `part_of{weight, confidence, hard}` beside `prereq{…}`, plus the `hard` field on both.)*
+- **The walk collects across both types — no type short-circuit — above a learned floor (r4: closes the base decision's advisory 1).** The backward walk (Mechanism 2) descends `prereq` **and** `part_of` edges under the same branch-local `significant(θ − ĉ, SE)` rule and the same `d_max`, with a **soft confidence floor `τ_traverse`** — the base B2 decision record's advisory guard, adopted here since this amendment redefines `confidence`'s role end-to-end, **made soft (r5) because a hard floor would be RC-4's "gate with no working inverse":** an edge's confidence is renewed by post-redirect outcome evidence, which requires the edge to be *traversed* — a hard floor would block the only channel that could ever re-admit it (a closed loop, fatal for a prereq whose sole dependent is the failing skill). So: edges with `confidence ≥ τ_traverse` are walked normally; **below-floor edges are walked on an exploration quota `q_edge`** (default 0.1; **sampling unit: an independent Bernoulli(`q_edge`) draw per below-floor edge per diagnosis walk**, so expected re-admission latency is ~`1/q_edge` walks — the same pattern as §19.1's `q_explore` and §5.3's reachability-exploration), so evidence can always flow again and a wrongly-decayed edge earns its way back. **Quota-walked edges face identical rules:** the same `significant(θ − ĉ, SE)` descent, the same candidacy, confirmation floors, and eviction as normally-walked ones — the quota changes *whether the edge is looked at*, never how its evidence is judged. The floor is thus evidence-based **damping** — below-floor edges stop dominating diagnosis but never become undiagnosable. Edge **type** never drops a candidate: a composite with both a weak constituent (`part_of`) and a more-severe independent prereq gap yields **both** as candidates, and **confirmation (base B2 step 3) adjudicates**.
+- **Traversal order (confirmation-budget efficiency only, never candidacy).** Within a walk frontier, children are visited in order of
+  ```
+  priority(e→P) = z( confidence(e) | frontier ) + z( (θ − ĉ_mastery[P]) / SE[P] | frontier )
+  ```
+  additive z-scores across the current frontier, per the §5.3 normalization convention (no raw-scale product). **Degenerate frontiers (r4):** with `|frontier| ≤ 1` ordering is skipped (nothing to order); a zero-variance term contributes `z = 0` (rank falls to the other term, then raw values). Ranking-only and non-gating: a low-priority significant candidate is visited later, never removed. **No static constant may enter this formula.**
+- **The confirmation budget — one ordering rule for everything queued (r7).** Two formulas, two disjoint jobs — **`priority()` orders traversal only** (which edge the walk visits next, confidence-inclusive because a walk is a search); **`queue_rank()` governs every queue decision** — both `Q_max` eviction *and* the order in which candidates take the `n_conf` confirmation floor:
+  ```
+  queue_rank(c) = gap_z(c) + min(age(c), A_cap)          # z-units
+  gap_z(P)      = (θ − ĉ_mastery[P]) / SE[P]             # raw significance of the gap
+  age(c)        = skipped-trigger count × 1 z-unit        # persisted from first candidacy, survives eviction
+  ```
+  Per diagnosis trigger, spend is capped at `b_conf` held-out items; candidates take the `n_conf` floor (≥5, the existing base parameter) **in descending `queue_rank` until `b_conf` is exhausted**; uncovered candidates re-queue and age. `gap_z` deliberately excludes the confidence term (so neither eviction nor confirmation order can compound the confidence-ranking bias — round 2's catch), and `age` enters **only** through `queue_rank`, always `A_cap`-capped — there is no separate uncapped aging mechanism anywhere. **`A_cap` (default 3 z-units) bounds priority inversion:** an aged moderate candidate outranks at most `A_cap` z-units of fresh severity. **The backlog bound, attributed correctly:** the load-bearing bound is `Q_max` occupancy + `queue_rank` eviction + capped aging; the `τ_traverse`/`q_edge` floor damps only *re-arrival from already-discredited edges*, and the base trigger (`n_trigger ≥ 3` failures per skill) rate-limits fresh arrival. **Expiry vs eviction, stated precisely:** *permanent* expiry is evidence-only (posterior movement — the gap stops being significant); *temporary* eviction is by lowest `queue_rank` (= evidence + a bounded age credit that exists precisely so ordering delay can't compound into permanent exclusion); an evicted candidate re-enters while its failures persist. Edge decay below the soft floor damps *future arrival* to the `q_edge` trickle; it never removes a queued candidate. Honest tradeoff: a capped candidate stays evicted only *while strictly more-severe candidates keep arriving* — triage, not starvation. *Worked capacity example (r8) — illustrative, not load-bearing: defaults confirm `⌊b_conf/n_conf⌋ = 3` candidates per trigger. **Take arrival ≤ 3 new candidates per trigger as a stipulated illustration input, not a derived bound** — a single skill's branchy walk can legitimately yield several candidate roots in one trigger (that is the no-short-circuit design working as intended), so no small constant is guaranteed. Under the stipulated rate the queue drains at steady state, a median-`queue_rank` arrival waits ≈2 triggers, and the worst case is `A_cap`-bounded. **The actual guarantee is arrival-independent:** `Q_max` + `queue_rank` eviction + capped aging bound the backlog and degrade to the stated triage order under any arrival composition — never to silent drops.*
+- **Acyclicity over the union, checked at insertion.** Acyclicity is enforced over **`prereq` ∪ `part_of`** (a cross-type cycle still deadlocks the walk). Every edge insertion — grown (§5.1) *or authored* — passes the same acyclicity check before entering the live graph; Teacher-authored edges are not exempt (closes the author-time RC-4 gap: §5.1's invariant covers only growth-inserted edges).
+- **Hard vs soft edges.** `hard=True` (authored/curricular requirement) breaks ties only within an explicit tolerance: hard wins iff `|Δpriority| < δ_hard` (z-units, default 0.1) — a bounded tie-break, never an override. Hard edges remain **fully subject to `g.decay_edges()`** on failed-redirect evidence (RC-4 inverse preserved: no authored edge is beyond evidence), and the flag influences **ordering only, never candidate admission**, so marking many edges `hard` cannot gate anything (see risks).
+- **Plug-point (extends base B2's).** The `Diagnose` walk reads typed edges via `GraphStore.in_edges(s, types={prereq, part_of})` (port added to DATA-LAYER §2.1 with this amendment; `prereqs(s)` remains as the untyped legacy read). The union-scoped acyclicity check is enforced at the graph **write path**: `GraphStore.merge()` validation, reporting violations via `MergeReport.rejected` (DATA-LAYER §6.2 — *cross-gate dependency, concurrently in gate*; fallback if §6.2 is not approved: the check lives in `add_skill`/edge-insertion) — either way it covers **all** insertion paths, authored included.
+- **Parameters:** `τ_traverse` edge-confidence soft floor (0.2) · `q_edge` below-floor exploration quota (0.1, per-edge-per-walk Bernoulli — the floor's inverse channel, closing the base decision's advisory 1 without an RC-4 hard gate) · `δ_hard` tie-break tolerance (0.1 z-units) · `b_conf` per-trigger confirmation budget (15 items) · `A_cap` aging cap (3 z-units; age enters only via `queue_rank`, +1 z-unit per skipped trigger, persisted across evictions) · `Q_max` confirmation-queue cap (12 candidates). `n_conf` (≥5) is the existing base-B2 confirmation parameter, now the per-candidate floor. The `hard` flag is schema.
+- **Honest risks**
+  - **Masking, moved to confirmation** (round-1 catch at candidacy; round-2 catch at budget): closed structurally by the per-candidate `n_conf` floor + aging re-queue + evidence-only expiry; the residual is *delay* (a low-priority candidate confirms triggers later), which is bounded by aging and is the honest cost of a finite budget.
+  - **Mixed-type cycles:** a `part_of`/`prereq` pair forming a 2-cycle would deadlock the walk — closed by union-scoped insertion-time acyclicity.
+  - **Hard-edge density / authored capture:** an author marking everything `hard` gets, at most, δ_hard-bounded tie-breaks on *ordering*; admission, significance, confirmation floors, and decay are untouched. Worst case = wasted early confirmation budget, self-correcting via `g.decay_edges`.
+- **Tests (extend B2's):**
+  - `test_both_types_reach_candidacy` — a composite with a weak constituent **and** a more-severe independent prereq gap yields both candidates; the prereq gap is not dropped (the masking regression).
+  - `test_tau_traverse_soft_floor_with_inverse` — an edge decayed below `τ_traverse` stops dominating diagnosis but is still walked at the `q_edge` rate; renewed positive post-redirect evidence gathered via those quota walks raises confidence and restores normal traversal (the RC-4 closed-loop regression: an edge whose ONLY dependent is the failing skill must remain re-admittable).
+  - `test_confirmation_floor_and_aging` — with more candidates than `b_conf` covers, floor allocation follows descending `queue_rank`; every persisting candidate reaches `n_conf` within a bounded number of triggers under the stated arrival assumption; none is dropped by ordering (the round-2 starvation regression).
+  - `test_one_ordering_rule_for_queues` — confirmation-floor order and eviction order are both `queue_rank`; `priority()` affects traversal only (the round-6 contradiction regression).
+  - `test_queue_bounded_under_sustained_arrival` — with new significant candidates arriving every trigger, queue occupancy never exceeds `Q_max`, eviction selects the lowest `queue_rank` (never raw age or position alone), and an evicted candidate with persisting failures re-enters at a later trigger (the round-3 unbounded-backlog regression).
+  - `test_eviction_cannot_starve_forever` — under arrival pressure that eventually relents, a moderate-`gap_z` candidate's persisted (capped) age wins queue entry and the `n_conf` floor; while strictly-more-severe candidates keep arriving it may stay evicted (correct triage), but never loses candidacy (the round-4 adversarial regression).
+  - `test_aging_cap_bounds_inversion` — an aged moderate candidate never outranks a fresh candidate whose `gap_z` exceeds it by more than `A_cap` (the round-5 adversarial regression).
+  - `test_quota_walked_edges_same_rules` — a candidate discovered via a `q_edge` quota walk faces identical significance, confirmation-floor, and eviction rules as normally-walked candidates.
+  - `test_degenerate_frontier` — `|frontier| = 1` skips ordering; zero-variance terms contribute z=0 without error.
+  - `test_candidacy_expires_on_evidence_only` — permanent expiry happens only via posterior movement; temporary eviction only via lowest `queue_rank`; below-floor edge decay damps arrival, never removes a queued candidate.
+  - `test_part_of_constituent_diagnosed` — a failing composite whose only significant gap is a constituent roots there.
+  - `test_traversal_order_derived_not_constant` — order follows updated `confidence`/posterior; no frozen constant can hold a branch first.
+  - `test_priority_is_frontier_zscored` — both terms z-scored per frontier (no raw-scale mixing).
+  - `test_weight_is_reserved` — no code path consumes `weight`; changing it alone changes nothing (traversal, reachability, candidacy).
+  - `test_typed_read_port` — the walk reads via `in_edges(s, types=…)`; `part_of` edges are reachable through the port.
+  - `test_union_acyclicity_at_insertion` — an authored `part_of` edge closing a cross-type cycle is rejected at insert.
+  - `test_hard_edge_tiebreak_bounded` — hard wins only within `δ_hard`; loses beyond it; many-hard-edges cannot change candidacy (density scenario).
+  - `test_hard_edge_still_decays` — a `hard` edge whose redirects fail `n_post` outcomes decays like any edge.
+
 ---
 
 ## B3 · Cross-agent skill transfer / fleet learning (agent-side)  ▣ APPROVED (review-360 82/100 · change-approver APPROVED)
@@ -246,6 +296,74 @@ Round-1 fixed all six: zero-trust is now an **enforced invariant** (no `A.StateS
 
 ---
 
+## R1 · Unified-retrieval dispatch & fusion reranker — the §16 companion build-spec  ▣ APPROVED (review-360 87/100 over 3 rounds · change-approver APPROVED)
+
+*Makes §16 implementable: names the store-dispatch API (§16.4) and fully specifies the §16.5 learned reranker's feature set and update rule. Adds NO new objective, gate, or belief — `U_Q = z(EIG_Q) − cost` (§16.3), the counterfactual credit (§5.2/§16.5), and the §8 gating of learned weights are unchanged. External-pattern provenance: the retrieval-mode taxonomy and multi-signal fusion are the shipped design of the closest published analogue (LightRAG/RAG-Anything), and reliability-weighted ranking is OpenSpace's quality-weighted retrieval made counterfactual — see `STUDY-raganything-agentscope-openspace.md` (P1); the statistics are ours.*
+
+### Mechanism
+1. **Modes = named store-composition presets (the dispatch API).** One entry point `retrieve(query, mode, k, filters) → [Pull]`, `mode ∈`:
+   - `skill-local` — vector + state: top-k similar content conditioned against `C` (skip the mastered, fetch the gap; §5.2);
+   - `curriculum-global` — graph + truth: prereq/structural context, lineage, eval history (multi-hop, bounded `d_ret`);
+   - `episode-naive` — vector only: raw ANN recall, no graph, no state conditioning (**the ablation baseline arm**);
+   - `hybrid` — union of `skill-local` + `curriculum-global` candidates;
+   - `mix` (default) — all stores; cache consulted first in every mode.
+   A mode defines the **candidate pull set, nothing else**: inner `π_Q` still selects each next pull by `z(EIG_Q) − cost` (§16.1) *within* the active mode's candidates. **Modes exist as cost control** — `mix` per-step would be EIG-optimal but queries every store; a mode restricts which stores are consulted to generate candidates.
+   **Mode dispatch (per `EXPAND`) — same rigor as everything else that selects on an estimate.** Each mode `m` keeps a posterior `N(μ_m, SE_m)` over its **realized per-pull contribution**: the sample unit is one episode's leave-one-out lift attributable to `m`'s pulls (the §16.5 cold-path signal), divided by pulls taken, over a sliding window `W_m`. Dispatch is **Thompson sampling over the mode posteriors** (exploration in the posterior, exactly the §5.3 pattern — never a point-estimate argmax, RC-1), with two floors:
+   - **Cold start (below `n_min_mode` samples):** the mode carries the prior `N(μ0, SE0)` with `μ0` = the pooled cross-mode mean contribution (0 before any mode has data) and `SE0` = 2× the pooled per-episode SD (a wide posterior ⇒ Thompson explores it aggressively — the A5 template: a new mode is tried, not presumed bad).
+   - **Cross-mode floor `ε_mode`, enforced as a deterministic quota:** per window `W_m`, each mode is **force-dispatched ⌈ε_mode · dispatches⌉ times**, scheduled round-robin across the window — a hard quota, not a probabilistic mixture, so the guarantee is exact and directly testable (the RC-7 anti-starvation guarantee `ε_ret` provides within a mode, provided across modes).
+   **This is not a third selection problem** (§16.1's "two selection problems" stands): mode-then-pull is a **hierarchical decomposition of the single inner `π_Q` decision** — one value-of-information rule applied at two granularities of the same within-`EXPAND` choice, collapsing to flat `π_Q` over the union when `mix` is dispatched. Outer `π_C` is untouched.
+   **The measurable claim**: full R1 (dispatch on, all modes) vs `episode-naive` (fixed, no dispatch) as frozen arm configurations — dispatch is part of the treatment arm, never toggled mid-arm.
+2. **Fusion feature vector (the §16.5 reranker, made concrete).** Each candidate source is scored `score(source) = v·x(source)` over z-scored features (**`v` = per-feature fusion weights, 5 scalars — renamed from round 1 to avoid colliding with §5.2's per-item credit `w[item]`**):
+   ```
+   x(source) = [ z(sim), z(struct), z(state_gap), z(rel), z(heat) ]
+   ```
+   - `sim` — semantic similarity (vector score);
+   - `struct` — structural importance: path-weight from the current goal's skill node over prerequisite-type edges, computed from edge `confidence` (**never a static constant**). *Cross-gate dependency, stated: the `part_of` type and the `weight`/`confidence` field split are defined by B2 Amendment A (separately in gate); if Amendment A is not approved, `struct` computes over `prereq`-edge `confidence` only — graceful degradation, no blocking dependency;*
+   - `state_gap` — state-conditioning against `C` (§5.2): `1 − P(mastered)` of the source's `skill_ref`;
+   - `rel` — source reliability: that source's accumulated per-item counterfactual credit — **literally §5.2's `w[item]`**, which `update_w` maintains (leave-one-out, never shared credit — RC-1) and whose existing `l1_decay` is what ages `rel` out when a source stops contributing;
+   - `heat` — cache/recency (the hot-path prior).
+   **Division of labour:** §5.2's `update_w` keeps doing exactly what it does (per-item counterfactual lift → feeds `rel`); `v` replaces the previously-opaque `score(·|n)` in §5.2's `rerank` with an explicit 5-feature linear form. `v` is updated **only on the §16.5 cold path** (episode-end realised held-out outcome), and each `v` update is admitted through the **§8 generalization sub-clause** — held-out-disjoint item split, per the S16 round-3 advisory — not a vague "any learned weight" hand-wave.
+3. **Reference-validation guard (invariant).** Every retrieved reference is validated against its owning store before context assembly — a pull naming a skill/chunk/event that does not exist (staleness, hallucinated rerank input, cross-store drift) is **dropped and logged, never assembled**. Cheap, and closes dangling-reference context poisoning.
+4. **Reliability cannot gate (RC-7).** `rel` biases rank as ONE z-scored feature among five; it never excludes a source class, and an `ε_ret` fraction of pulls samples **reliability-blind** (uniform over the mode's candidates) so a cold source can earn lift evidence — the retrieval analog of the §5.3 coverage floor.
+
+### Plug-point
+`mdlp/retrieval.py :: Retriever.retrieve(query, mode, ...)` over the `Stores` bundle (DATA-LAYER §2); fusion weights `v` live beside §5.2's `update_w` (which keeps maintaining the per-item `w[item]` that feeds `rel`); inner-loop call site is §16.1's `EXPAND`. (`mdlp/` — spec only.)
+
+### Parameters
+Closes the two S16-commissioned advisory items (S16 decision §"companion-build-spec advisories") explicitly:
+- **`b_ret` = 8 pulls per `EXPAND`** (unit: retrieve calls; the §16.6 budget, given its default here).
+- **`K` = 3** consecutive low-gain pulls → diminishing-returns stop (§16.6/§15.3 rule, default pinned).
+- **`(α_Q0, β_Q0)` = (1, 1)** — uniform episode-scoped `Q` init (§16.2).
+- **`v`-update gate = the §8 generalization sub-clause** (held-out-disjoint split), pinned per the S16 round-3 advisory.
+Plus: mode default (`mix`) · per-store `k` (8) · graph hop bound `d_ret` (2) · `ε_ret` reliability-blind exploration within-mode (0.1) · **`ε_mode` cross-mode dispatch quota (0.05, deterministic)** · **`n_min_mode` mode cold-start floor (10 episodes)** · **`(μ0, SE0)` mode cold-start prior (pooled mean, 2× pooled SD)** · **`W_m` mode-posterior window (50 episodes)** · `v` init (uniform). §16's own dials (`b_ret`, `K`, `(α_Q0,β_Q0)`) are already in §12; R1's dials are registered **here, at build-spec level** — the A1–B4 precedent (`u_ref`, `n_eff_warm`, `ρ_M`… all live in their build-spec items, not §12).
+
+### Honest risks
+- **Rich-get-richer via `rel`** (a reliability bubble): bounded by `ε_ret` + leave-one-out credit (a source earns `rel` only from *unique* lift) + `rel` never gates (mech 4).
+- **Mode starvation by a noisy early estimate** (RC-1/RC-7 at the dispatch layer): closed by Thompson-over-posterior (never point-argmax) + the `n_min_mode` flat-prior cold start + the hard `ε_mode` floor.
+- **Mode proliferation:** the five presets are a closed set; a new mode is a spec change through this gate, not a config knob.
+- **Format-correlation gaming (RC-2 residual, §16.7):** unchanged mitigation — held-out-item-level scoring + the §8 generalization sub-clause on `v`.
+- **`struct` staleness:** path-weights read the graph as-of selection; a stale edge biases one z-scored feature and decays via §5.1 `g.decay_edges`.
+
+### Tests
+- The three §16.8 stubs are inherited verbatim (`test_reduces_to_A1_when_no_retrieval`, `test_retrieve_cannot_substitute_for_practice`, `test_eig_q_expected_not_realized`).
+- `test_mode_dispatch_thompson_with_floors` — dispatch samples the mode posterior (never point-argmax); a mode below `n_min_mode` gets the flat optimistic prior; a mode with a noisy-bad early estimate still receives ≥ `ε_mode` of dispatches per window (the starvation regression).
+- `test_mode_dispatch_collapses_under_mix` — dispatching `mix` equals flat `π_Q` over the union (hierarchy = decomposition, not a third selection problem).
+- `test_mode_presets_are_closed_set` — an unknown mode is rejected.
+- `test_naive_arm_is_clean_baseline` — `episode-naive` touches no graph/state store (ablation validity); arm configurations frozen for the measurable claim.
+- `test_inner_pi_q_selects_within_mode` — per-step pull choice is `z(EIG_Q)−cost` over the active mode's candidates only.
+- `test_fusion_features_z_scored_commensurable` — no raw-scale feature enters `score` (RC-1).
+- `test_rel_is_w_item` — `rel` reads §5.2's `w[item]` (one credit ledger, no second bookkeeping); `l1_decay` ages `rel` out.
+- `test_rel_from_leave_one_out_only` — shared-context credit never moves `rel`.
+- `test_rel_biases_never_excludes` — with `rel=0` a source still appears in candidates; `ε_ret` samples reliability-blind.
+- `test_dangling_reference_dropped` — a retrieved id absent from its store never reaches context assembly.
+- `test_v_gated_by_generalization_subclause` — a `v` update failing the held-out-disjoint split is rejected.
+- `test_defaults_reduce_to_approved_16` — `v` uniform + mode `mix` reproduces §16 as previously approved (no regression of the gated design).
+
+### Review notes (review-360 round 1: 54 → round 2: 76 → round 3: 87 → APPROVED)
+Round 1 caught the one genuinely new mechanism reopening RC-1/RC-7: mode dispatch as a bare point-estimate with no floor — fixed to Thompson-over-`N(μ_m,SE_m)` with an A5-style cold-start prior and a **deterministic** `ε_mode` quota. Round 2 caught the incomplete `w`→`v` rename and the undeclared cross-gate dependency on B2 Amendment A (now stated inline with graceful degradation to approved-base `prereq` confidence). Round 3 verified all closures; decision record `reviews/R1-retrieval-dispatch-decision.md` carries four non-blocking advisories for the implementer (header "no new belief" phrasing vs the mode posterior; `μ_m`/`SE_m` update in prose; episode-naive cache-provenance hygiene for the ablation arm; calibration trend). Closes both S16-commissioned advisory items (`b_ret`/`K`/`(α_Q0,β_Q0)` defaults; `v`-gate pinned to the §8 generalization sub-clause).
+
+---
+
 ## E · Store-native levers — disposition (not separately gated)  ▣ COVERED
 
 The register's E levers are realized by the already-approved/specced items; E adds no separate build:
@@ -264,4 +382,4 @@ These are **decide-or-defer**, not committed builds, so they are not run through
 
 ---
 
-*Done: A1, A5, B4, B1, B2, B3 ▣ all approved (review-360 >80 → change-approver APPROVED) · E ▣ covered · §16 unified retrieval ▣ approved · **G1 self-mod + multi-agent: owner go-decision 2026-06-27 → designed as §17/§18 (M3), in the gate**. Every build cleared the two-stage gate: 360° review → approval.*
+*Done: A1, A5, B4, B1, B2 (+ Amendment A, 2026-07-13), B3, R1 ▣ all approved (review-360 >80 → change-approver APPROVED) · E ▣ covered · §16 unified retrieval ▣ approved · §17/§18 ▣ approved (M3) · §17.6 lineage schema ▣ approved 2026-07-13. Every build cleared the two-stage gate: 360° review → approval.*
