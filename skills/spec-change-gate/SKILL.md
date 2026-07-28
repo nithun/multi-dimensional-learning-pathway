@@ -62,6 +62,42 @@ This is a process playbook. It does not restate the two agents' full mechanics �
    The committing agent/user applies the change and cites the decision record's path in
    the commit message.
 
+## Pre-submission authoring checklist (before spawning `review-360` on any round)
+
+The single most common defect class this gate has caught — 5+ distinct instances across
+the three multi-round artifacts of the 2026-07-13 external-study build cycle (S17.6
+lineage schema, DATA-LAYER §6.1/6.2, B2 Amendment A; ~30 rounds total) — is **claiming a
+fix that was never actually written down consistently**: a schema field, `§12` parameter,
+or cross-reference asserted as present/registered/reconciled when it isn't, or fixed at
+one location while a co-dependent location (a `Record schemas` section, an adjacent bullet
+describing the same mechanism, a `Protocol` code block, a "Port delta" summary line) is
+left stale and now contradicts the fix. Several rounds scored this exact class a second,
+third, even fifth consecutive time on the same artifact. Before resubmitting a revised
+round, do these three things, in order — not after a review-360 round has already flagged
+it:
+
+1. **Schema-first edit.** If the change touches a field, parameter, or registration, write
+   it into the canonical schema/registration location (the `DATA-LAYER.md` schema block,
+   the algorithm doc's `§12` parameter list, a `Protocol`/interface code block) BEFORE
+   editing the prose that describes or depends on it. Editing narrative first and the
+   schema "later" is exactly how the two drift apart.
+2. **End-to-end contradiction read.** Re-read the full artifact (not just the diff) once,
+   specifically hunting for two passages that describe the same mechanism, field, or check
+   differently — this is the shape every recurrence of the defect took (a schema block and
+   a `CAPTURE`/"Port delta" bullet three lines apart disagreeing about the same thing).
+3. **Grep-verify every cross-reference.** For every symbol/field/parameter name touched,
+   `grep` it across every file that cites it (the algorithm doc, `DATA-LAYER.md`,
+   `BUILD-SPECS.md`, any linked `IMPLEMENTATION-v2.md` section) and confirm every hit is
+   consistent with the new definition — not just the location you edited.
+
+*Source: L-013, `interactions.jsonl` IX-039 (2026-07-13); evolution-log.jsonl EV-48, EV-51,
+EV-53, EV-54, EV-56, EV-57, EV-59, EV-60, EV-61, EV-65, EV-66, EV-67 name this exact class
+recurring (some reports literally say "the Nth recurrence of this defect class") across
+S17-6 lineage-schema rounds 2/4/5/6, DL-write-discipline rounds 2/3/6/7/9/10/11, and
+B2-amendA round 4. All three artifacts eventually reached APPROVED once a round genuinely
+did all three steps above before resubmission (S17-6 round 7 = 84; DL-write-discipline
+round 12 = 83; B2-amendA round 8 = 85).*
+
 ## Round-numbering / file-naming convention
 
 Observed directly in `docs/research/reviews/`:
