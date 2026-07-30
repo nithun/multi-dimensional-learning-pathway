@@ -55,6 +55,8 @@ The single source of truth for what the brainstorm sessions surfaced and **where
 | **B2 Amendment A · typed hierarchy edges + derived traversal** — `part_of` edges, soft `τ_traverse` floor + `q_edge` inverse, `queue_rank` confirmation queue | ✅ ▣ | BUILD-SPECS B2 Amendment A · gate-approved 2026-07-13 (review-360 85/100, 8 rounds → change-approver) — study P6 |
 | **§17.6 · scaffold-version log schema** — version DAG, FIX/DERIVE/CAPTURE operators, ancestry-checked CAPTURE, reactivation + concurrent re-validation | ✅ ▣ | ALGORITHM §17.6 · gate-approved 2026-07-13 (review-360 84/100, 7 rounds → change-approver) — study P3 |
 | **DATA-LAYER §6.1/§6.2 · write discipline** — occurrence-identity hashing (dispatch/`seq`/work-unit lifecycle), two-phase extract→merge projection writes, `RedactedTruthView` P1 boundary | ✅ ▣ | DATA-LAYER §6 · gate-approved 2026-07-13 (review-360 83/100, 12 rounds → change-approver) — study P2 |
+| **§20 · Continuous operation (AUT-1)** — two-level loop, schedule-as-table on §6.1 work units, four-way recovery predicate, budget tiers (defer-never-loosen), layered brakes, holder/candidate supervisor singleton, passive-informing contract | ✅ ▣ | ALGORITHM §20 · gate-approved 2026-07-30 (review-360 87/100, 5 rounds → change-approver) — automaton+hermes studies |
+| **DATA-LAYER §11 · Observability & analytics (AUT-2)** — ObservabilityPort + AnalyticsStore opt-in roles (Langfuse/ClickHouse full tier), JUDGE-authored-only emission, credential-custody inference broker, `InferenceClient` registry-pinned | ✅ ▣ | DATA-LAYER §11 · gate-approved 2026-07-30 (review-360 83/100, 8 rounds → change-approver) — automaton A2 + hermes §3.5/§5 |
 
 ## F · New capability apps (scenario-level — gated on the verifier)
 | App | Status | Note |
