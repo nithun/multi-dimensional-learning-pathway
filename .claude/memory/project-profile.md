@@ -8,10 +8,10 @@ _Last profiled: 2026-07-28 by scout (deep pass; supersedes the 2026-07-02 deep p
 - **Scope rule (hard, L-012):** this repo manages ONLY MDLP research/specs. `/Users/samyoga/dev/turing-agents` is the user's own implementation — read-only from here, forever; anything it needs crosses **via the user, manually** (the HANDOVER docs are exactly that vehicle). [verified — L-012, user memory]
 - The repo also carries the **Turing Agents v0.2.0** self-evolving scaffold (Markdown + Bash) the research runs on. [verified]
 
-## Branch / working-tree situation (2026-07-28)
-- HEAD = `research/external-repo-study-2026-07-13`, **13 commits ahead of local `main`, not merged**; local `main` is itself 7 commits ahead of `origin/main`. Nothing since 2026-07-02 is pushed. [verified — git]
-- Committed on the branch: the 4 gate-approved 2026-07-13 spec changes (`ce53ccc`…`adfba2f`), ungated study deliverables (`bb70…/8c6cc56`), and the 2026-07-13 + 2026-07-28 evolve commits (L-013/L-014, spec-change-gate skill update, RR-2026-07-28). [verified]
-- **Still uncommitted (untracked):** `docs/research/HANDOVER-v3.md`, `STUDY-automaton-autonomy.md`, `STUDY-small-models-for-mdlp.md`; modified `interactions.jsonl`. Commits await user authorization. [verified — git status]
+## Branch / working-tree situation (2026-07-28, post-merge)
+- `research/external-repo-study-2026-07-13` **fast-forward merged into `main`** (2026-07-28, user-authorized); HEAD = `main` @ `96e914b`. All session work is on main: the 4 gate-approved spec changes + full review trail, 4 studies (external-repos, automaton, small-models, hermes), M1-EVAL-PROTOCOL, HANDOVER-v3, evolve commits. The research branch still exists (fully merged; safe to delete). [verified — git]
+- **Pushed 2026-07-28 (user-authorized):** `origin/main` = local `main` @ `96e914b` — everything through the hermes study is published. [verified — git push output]
+- Working tree clean except the pre-existing untracked `.claude/memory/chats/` (framework leftover, deliberately uncommitted) and this profile edit. [verified — git status]
 
 ## Core intellectual state (as of 2026-07-28)
 - **Spec of record:** `ALGORITHM-v0.2-pathway-learner.md` §1–§19 **plus §17.6** (scaffold-version log, FIX/DERIVE/CAPTURE, approved 84/100). All additions additive; all gate-approved. [verified]
