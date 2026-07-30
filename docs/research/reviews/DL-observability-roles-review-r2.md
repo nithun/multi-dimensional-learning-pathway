@@ -1,0 +1,131 @@
+# 360 Review: DL-observability-roles — 2026-07-30 (Round 2)
+
+| Field | Value |
+|---|---|
+| Artifact | `docs/research/DATA-LAYER.md` §11 "revised r2 — IN GATE" (+ anchored deltas: §1 pointer, §5 schemas, §6 rebuild line, §6.1 exemption list, §7 extras) |
+| Proposed change | Round-2 revision of §11 (`ObservabilityPort` + `AnalyticsStore` autonomy-profile roles) responding to the five blocking items from round 1 |
+| Reviewer | review-360 |
+| Date | 2026-07-30 |
+| Round | 2 (r2) |
+| Prior review | `docs/research/reviews/DL-observability-roles-review.md` — overall 52, needs-revision |
+| Circuit-breaker | `agents.status = "open"` (`.claude/memory/circuit-breaker.json`) — filed as a direct review, not a proposal |
+
+## Dimension scores
+
+| # | Dimension | Score | Status |
+|---|---|---|---|
+| 1 | Correctness (CRITICAL) | 74 | weak |
+| 2 | Design faithfulness | 81 | pass |
+| 3 | Red-team resistance (CRITICAL) | 60 | weak |
+| 4 | Implementability | 68 | weak |
+| 5 | Safety / integrity (CRITICAL) | 65 | weak |
+| 6 | Efficiency / cost | 85 | pass |
+| 7 | Completeness | 65 | weak |
+| 8 | Consistency | 68 | weak |
+| 9 | Calibration / honesty | 70 | pass |
+
+## Round-1 item closure ledger (verify each before scoring)
+
+| Round-1 item | Verdict | Evidence |
+|---|---|---|
+| (1) Dangling §5 citation (`trace`/`score` schema cited, absent) | **Closed** | DATA-LAYER.md:145 now carries `` event kinds `trace{correlation_id, kind ∈ dispatch|span|cycle|delivery, payload, ts}` + `score{correlation_id, name, value, ts}` `` with the parenthetical `(the embedded ObservabilityPort backing — administrative class, JUDGE-emitted; delta gated under §11)`. §11.3 (DATA-LAYER.md:327) cites "§5" and it is now genuinely there. |
+| (2) RC-2-shaped side channel — `score()` reveals gate strictness | **Partially closed — see Correctness/Red-team findings below** | The `ObservabilityPort.score()` vector is genuinely closed: DATA-LAYER.md:319 states the solve-bundle port's `score()` "raises unconditionally," backed by a new test `test_solve_bundle_score_raises` (DATA-LAYER.md:340). But the same content is independently reachable through `AnalyticsStore.query()` (DATA-LAYER.md:302, 312-314), whose closure is asserted only in prose ("Score reads are likewise JUDGE-side only," :319) with no structural check, no test, and no static admission analysis analogous to §6.1's `test_solve_candidate_cannot_import_unredacted_truth` (DATA-LAYER.md:190). This is a residual instance of the same failure family, not a new one — see finding below. |
+| (3) "Spans" phantom concept | **Closed** | §5's `kind` enum now includes `span` (DATA-LAYER.md:145), matching §11.1's "model-call cost/latency as `kind=span` entries" (DATA-LAYER.md:301). No dangling concept remains. |
+| (4) Untested "counted" half of invariant 2 | **Closed** | `test_emit_failures_counted_and_surfaced` (DATA-LAYER.md:340) explicitly asserts "counting must not depend on the failing emitter" — addresses the recursion concern raised in round 1, though the *mechanism* (is the counter an in-process primitive independent of the port?) is still only implied by the test description, not spelled out in prose. Non-blocking residue. |
+| (5) §19.1-tuple vs `score()` duplication unreconciled | **Closed** | New "Canonical-record rule" (DATA-LAYER.md:330): "where a Truth record already exists (e.g. the §19.1 calibration tuple), `score()` mirrors it for legibility — Truth remains the canonical copy and the only one anything statistical reads; the observability copy is disposable." Directly answers round 1's ambiguity — it's a mirror, not a shared write, and Truth is canonical. |
+| (6, non-blocking) Langfuse/ClickHouse table isolation unstated | **Closed** | DATA-LAYER.md:330: "one deployment can back both roles, in **separate databases/schemas** (the AnalyticsStore projection never writes into Langfuse's tables or vice versa)." Concretely states the isolation mechanism round 1 asked for. |
+
+Four of five blocking items are genuinely and concretely closed. Item (2) — the load-bearing one, since it drove round 1's Red-team/Safety floor — is **half-closed**: the fix is real and well-executed for the surface it targets (the `ObservabilityPort.score()` method) but does not extend to the other surface that the section's own text says carries the identical content.
+
+## Findings by dimension
+
+### 1. Correctness
+
+- The central round-1 defect (dangling §5 citation) is verifiably fixed — confirmed by direct read of DATA-LAYER.md:145 and DATA-LAYER.md:327.
+- **New inconsistency introduced by the fix itself: the §5 schema line's "JUDGE-emitted" tag is in tension with §11.2 invariant 1's own framing.** DATA-LAYER.md:145 asserts *both* event kinds — `trace` and `score` — are "JUDGE-emitted." But §11.2 invariant 1 (DATA-LAYER.md:319) states "the solve bundle's ObservabilityPort is trace-only: its `score()` raises unconditionally" — this asymmetry (`trace()` usable, `score()` not) only makes sense if SOLVE-side code is expected to actively call `trace()` itself (e.g., scaffold-level instrumentation of its own retrieval/tool choices — plausible given `kind=span` covers "model-call cost/latency," and model calls are dispatched from SOLVE's mutable tool-wiring, §17.1). If `trace()` is genuinely SOLVE-callable, then not every `trace` row is JUDGE-emitted, contradicting the §5 parenthetical's blanket claim. Two readings are both defensible but neither is stated: (a) `trace()` is SOLVE-callable and the "JUDGE-emitted" tag is loose/inaccurate for that kind; (b) "JUDGE-emitted" means the *underlying write path* is JUDGE-owned code regardless of the calling context (mirroring how `component_invoked` is written by the orchestrator observing SOLVE, not by SOLVE itself) — in which case invariant 1's "trace-only" carve-out is describing something SOLVE never actually exercises directly, and the round-2 fix's own rationale ("a `self_modify` candidate can never read *or emit* gate-posture signals through this port") is describing an emit-path that, under reading (b), doesn't exist for SOLVE at all — making the "or emit" half of that sentence vacuous rather than a real closure. The document does not disambiguate, and the two readings have different practical implications: whether a self-mod candidate can create *arbitrary* trace payloads at all (reading a) or not (reading b). This is a genuine, evidence-backed correctness/consistency gap that the r2 fix leaves latent (not present in round 1 in this form, since round 1's §5 line didn't exist to be checked against §11.2's language).
+- No arithmetic/formula defects found in §11 (it contains no inequalities or numeric derivations of its own — those live in §19, unchanged and out of scope for this delta).
+
+### 2. Design faithfulness
+
+- The r2 fix chose the *right kind* of mechanism for the closed part of item (2): rather than stretching the ill-fitting P1 held-out-redaction rule (§6.1's `RedactedTruthView`, designed for item-content) over score's numeric/calibration content — which is exactly what round 1 flagged as an overclaim — r2 introduces a **new, purpose-built invariant** (§11.2 invariant 1) instead. That is the correct design move and is faithful to §17.1's own layering principle (a write/emit-path property gets its own gate, not a borrowed one).
+- Still no BUILD-SPECS.md companion entry for AUT-2 (confirmed: grep for `AUT-2`/`ObservabilityPort`/`AnalyticsStore` in BUILD-SPECS.md returns nothing), and no mention of §11 in ALGORITHM-INTEGRATIONS.md either (confirmed by grep). This was flagged non-blocking in round 1 and remains so — but it means the M-R milestone gate this section serves (ALGORITHM-v0.2:597, §20.7's "trace/delivery substrate is the ObservabilityPort — separately gated," ALGORITHM-v0.2:632) still has no place in BUILD-SPECS where a developer would find it during implementation planning.
+- §11.2 invariant 1's closing clause ("§19.4's write-protection extended to the read/emit side, the same analysis §6.1 did for TruthStore") **claims a methodological parity it does not structurally deliver** — see Calibration/honesty below; this is as much a design-faithfulness question (does it actually follow the §6.1 pattern it invokes?) as an honesty one.
+
+### 3. Red-team resistance
+
+- **The RC-2-shaped side channel from round 1 is narrowed, not closed.** §11's own stated purpose for `AnalyticsStore` names "§19 calibration-tuple queries" as its *first* listed consumer (DATA-LAYER.md:302). Combined with the r2-added canonical-record rule (§11.3, DATA-LAYER.md:330: "the §19.1 calibration tuple" is what `score()` mirrors, and "Truth remains... the only one anything statistical reads"), this establishes that gate-decision/calibration-tuple content is present, by design, in whichever store actually backs §19's statistical reads — and `AnalyticsStore`, "a rebuildable projection of TruthStore" (DATA-LAYER.md:302), is the explicit vehicle for that.
+  - §11.2 invariant 1's second sentence addresses this directly: "Score reads are likewise JUDGE-side only (the AnalyticsStore queries §19 uses run in JUDGE)" (DATA-LAYER.md:319). This is **prose describing intended usage, not a structural guarantee**. Contrast with the treatment §6.1 gives the *exact same class of hazard* for `TruthStore`: an explicit static/import-level admission check ("the admission analysis additionally verifies that no SOLVE candidate imports or constructs the unredacted `TruthStore` adapter," DATA-LAYER.md:190) plus a named test (`test_solve_candidate_cannot_import_unredacted_truth`, DATA-LAYER.md:190, 234) plus the §17.3 sandbox as a runtime backstop. Nothing analogous exists for `AnalyticsStore`: no test in §11.5 (DATA-LAYER.md:340) checks that a `self_modify` candidate cannot import/construct/query it; §17.1's wall-invariant static check is scoped to "no write-path and no output-influence into JUDGE," which does not obviously cover a *read*-only import of a JUDGE-consumed store (§6.1 itself treats this as "a different hazard" needing its own separate check, precisely because a bare wiring-time argument is insufficient once `self_modify` (M3) can write arbitrary new SOLVE code, including new imports that are not reflection/`eval`/dynamic-import and so would not trip the §17.1 decidability ban).
+  - **Concretely:** nothing stated in §11, §17.1, or §17.3 stops a `self_modify`-proposed SOLVE component from containing a plain `import` of the full-tier `AnalyticsStore` adapter and issuing `query("SELECT value FROM score WHERE name LIKE '%z_knob%'")` (or the embedded-tier SQLite-views equivalent) — this is an ordinary static import, not reflection or dynamic import, so it survives the §17.1 decidable-ban check; the Stage-1 sandbox description ("isolated subprocess, no write access outside SOLVE," §17.3) restricts *writes*, not read-only network/file access, so it does not obviously block this either.
+  - **Severity call:** this is a residual attack surface, not a full reopening, for the reasons round 1 also applied to the analogous case: (a) it is additive/opt-in (profile off ⇒ no exposure), (b) §19.3's clamp remains an orthogonal hard floor regardless of what `self_modify` observes, (c) `self_modify`/M3 is not yet built (gated on M2) — so this is a design-time gap, not a live exploit today. But it is squarely the same root-cause family (RC-2: an optimizer aimed at the verifier gains an oracle into gate posture) and the section's own §11.2 prose claims to have "closed" it ("closes the RC-2-shaped side-channel") when in fact only one of at least two documented read surfaces carrying identical content is closed. Scored per the agent's own rubric ("score 0 if it reopens a known failure mode; score based on residual attack surface otherwise") — this is residual-attack-surface territory, materially better than round 1's fully-open state (52), but still below the acceptable band because the closure claimed in the text is broader than the closure actually delivered.
+
+### 4. Implementability
+
+- The missing-schema blocker from round 1 is resolved (§5 now has the row shape).
+- **New implementability gap: §11.2's "the solve bundle's ObservabilityPort" presupposes a Bundles/Stores extension that is never specified.** §2.1 (DATA-LAYER.md:52-96) defines exactly six ports in the `Stores` dataclass (TruthStore, StateStore, VectorStore, GraphStore, CacheStore, ArtifactStore) and the `Bundles{judge: Stores, solve: Stores}` two-bundle wiring is scoped to those six, with `RedactedTruthView` as the one documented judge/solve variance. §11.2's invariant 1 talks about "the solve bundle's ObservabilityPort" as though `ObservabilityPort`/`AnalyticsStore` were folded into that same `Bundles` structure, but neither §2.1 nor §4 (config, DATA-LAYER.md:114-139) nor §11 itself states this extension concretely: is `ObservabilityPort` a 7th port on `Stores`? A separate `Bundles.judge.observability` / `Bundles.solve.observability` pair added by this delta? The prose assumes the reader will infer it, but a developer implementing this section literally has no dataclass/field name to add. This is the same category of gap round 1 flagged for `rebuild_analytics`'s SQLite-view semantics and the `correlation_id` discriminator — both of which remain **unresolved and untouched by r2** (they were not among round 1's five listed blocking items, so their persistence is expected, not a regression, but they still cost real Implementability points).
+- `ObservabilityPort` still defines no read/query method (round 1's finding stands unchanged) — the only read surface is `AnalyticsStore.query()`, which sharpens (rather than resolves) the Red-team finding above: readers of gate/calibration content have exactly one programmatic door, and that door's SOLVE-side access control is asserted, not built.
+
+### 5. Safety / integrity
+
+- No *existing* gate, §14 calibration layer, or verifier constraint is weakened by §11 as revised — consistent with round 1's finding, unchanged.
+- The safety-relevant judgment call for r2 is whether the residual `AnalyticsStore` read-path (finding #3 above) constitutes an integrity weakening of the §17.1/§19.4 JUDGE-immutability boundary. It does not loosen any *stated* invariant's math (§19.3's clamp is untouched, §19.4's "JUDGE, not SOLVE" text for the *calibration logic itself* remains true — the calibration knobs are still unwritable by SOLVE). But §19.4 and §11.2 both frame this section as extending that same protection to the **read/emit side**, and that extension is only half-built. Scoring this as a safety concern rather than pure red-team: the risk is that a developer or a future reviewer, reading "closes the RC-2-shaped side-channel" (DATA-LAYER.md:319) and the passing `test_solve_bundle_score_raises`, reasonably concludes the read-side hazard is fully retired for this section and stops looking — exactly the failure mode §6.1 explicitly warns against for the analogous TruthStore case ("acquiring an unredacted read reference is a different hazard, so the admission analysis additionally verifies..." DATA-LAYER.md:190) but which §11 does not carry through to its own new store.
+- Scored 65 (below the 70 critical floor): not because an existing floor moved, but because the section's safety narrative overstates what is structurally guaranteed, in the one place (JUDGE-internal calibration content) this whole round of revision exists to secure.
+
+### 6. Efficiency / cost
+
+- Unchanged from round 1 (85): still cold-path, emit-and-forget, no new synchronous LLM calls, no O(n²) additions. The r2 deltas (a raising `score()` on the solve side, an extra mirror-write for the canonical-record rule) are O(1) per event, immaterial to the cost profile.
+- The mirror-write introduced by the canonical-record rule ("`score()` mirrors it for legibility," DATA-LAYER.md:330) is a second write per calibration tuple (one to the §19.1 TruthStore log, one to the `score` administrative event) — round 1 flagged this as an open question; r2 answers it (it's an intentional duplicate) but doesn't quantify or bound it. Not a real cost concern given both are cheap appends, but worth a one-line acknowledgment that this doubles write volume for calibration tuples specifically.
+
+### 7. Completeness
+
+- Two of round 1's missing-test items are now covered: `test_solve_bundle_score_raises` and `test_emit_failures_counted_and_surfaced` (DATA-LAYER.md:340).
+- **New completeness gap: no test exists for the `AnalyticsStore` read-path enforcement** that §11.2 invariant 1's second sentence claims ("Score reads are likewise JUDGE-side only"). The existing test list (DATA-LAYER.md:340) has nothing resembling `test_solve_cannot_import_analytics_store` or `test_solve_cannot_query_gate_internal_rows` — the asymmetry with `test_solve_bundle_score_raises` (which exists precisely because the *port* method got a structural fix) is stark: the store that round-2's own text names as where "§19 calibration-tuple queries" actually happen has zero test coverage for SOLVE-side exclusion.
+- Round-1's other completeness gaps (backpressure/queue-depth bound for the emit-and-forget buffer; `flush()`-failing-itself edge case) are untouched by r2 — expected, since they weren't in the five-item closure list, but they remain real gaps a build-spec would need to resolve.
+- The `rebuild_analytics` semantics-for-embedded-SQLite-views question (round 1, DATA-LAYER.md:327/162) is untouched.
+
+### 8. Consistency
+
+- The sharpest round-1 inconsistency (§11.3 → §5 dangling citation) is resolved — confirmed by direct comparison of the two locations.
+- New inconsistency: the "JUDGE-emitted" schema-line tag vs. §11.2's SOLVE-usable `trace()` (Correctness finding above) is a genuine, if narrow, textual tension between two artifacts written in the same delta.
+- New inconsistency: §11.2's claim of parity with §6.1's read-side analysis for `TruthStore` ("the same analysis §6.1 did for TruthStore") is not actually the same analysis when compared side-by-side (static import-check + test vs. prose assertion, no test) — see Calibration below. This is a self-referential consistency problem: the document cites its own prior section as the standard it's meeting, and does not meet it.
+- Otherwise §11 remains internally consistent with §6 (rebuild line), §6.1 (exemption list — `trace`/`score` correctly listed, DATA-LAYER.md:188), §7 (extras), and §1 (pointer) — all four anchored deltas are present and correctly worded, as in round 1.
+
+### 9. Calibration / honesty
+
+- The round-1 overclaim ("P1 across traces... covers this") does not recur in the same form — r2 correctly built a separate invariant instead of stretching P1, which is the honest fix.
+- **A new instance of the same underlying pattern appears in its place.** §11.2 invariant 1 states, unqualified: "closes the RC-2-shaped side-channel... §19.4's write-protection extended to the read/emit side, the same analysis §6.1 did for TruthStore" (DATA-LAYER.md:319). Compared against what §6.1 actually did for TruthStore (a named static admission check + a named test + the Stage-1 sandbox as backstop, DATA-LAYER.md:190) versus what §11 actually does for `AnalyticsStore` (a sentence: "Score reads are... JUDGE-side only... run in JUDGE"), the claim of methodological parity is not earned. Notably, **this same document practices exactly the honest-hedging discipline that would fix this**, elsewhere, in this very delta's neighborhood: §17.6 states plainly, "Honest scope: this narrows RC-6's stale-fallback exposure to the concurrent-check window under a tightened monitor — it does not close it" (DATA-LAYER.md:508, algorithm-side but the same authoring voice/discipline this project holds itself to). §11's r2 revision has no equivalent caveat for the `AnalyticsStore` gap it leaves open — it asserts full closure rather than scoped closure. That is the calibration ding: not a wild overclaim, but a real one, judged against a standard of self-honesty this same authoring effort demonstrably knows how to meet and did not apply here.
+- Everything else remains appropriately hedged (canonical-record rule's "disposable" framing, the explicit "opt-in" language throughout, the Langfuse/ClickHouse isolation note stated plainly rather than glossed over).
+
+## Strongest adversarial objection
+
+The round-2 fix is easy to mistake for a complete closure because it *looks* structurally identical to §6.1's TruthStore treatment: a named invariant, a raising method, a passing test with a name that reads like a regression guard (`test_solve_bundle_score_raises` — "the r2 side-channel regression," DATA-LAYER.md:340). But the actual content that made round 1's finding dangerous — JUDGE-internal gate-decision and calibration-tuple data — has (at minimum) three distinct surfaces in this design: `ObservabilityPort.score()` (now closed, tested), `AnalyticsStore.query()` (closed only in prose, no test, no static check — and this is §19's own *named, load-bearing consumer* of that content), and the embedded tier's raw physical backing (a JSONL trace file + a SQLite administrative-events table, §11.3) which has no stated filesystem/process-isolation guarantee comparable to JUDGE's "separate address space" backstop (§17.1) and is reachable by any process with filesystem access, including — absent an explicit statement to the contrary — the §17.3 Stage-1 sandbox subprocess. **A developer implementing this section exactly as written, and passing every listed §11.5 test, would ship a system where two of the three surfaces carrying gate-posture content remain fully open to a future `self_modify` candidate** — and nothing in the test suite would catch it, because no test in §11.5 exercises either of the other two surfaces. The round-2 revision's own framing ("closes the RC-2-shaped side-channel") is the tell: it names the general hazard, then demonstrates closure of only the one instance that happened to be the easiest to fix (a single method call), leaving the harder ones (a general-purpose query interface, and raw storage access) unaddressed and — critically — un-flagged as still-open in the text itself. This is not a new failure mode; it is the *exact same compound* round 1's adversarial pass named ("a developer... would ship a channel that leaks gate-strictness information... and have no schema to consult"), now recurring one layer down, having successfully migrated past the specific check that was added to stop it.
+
+## Aggregate confidence
+
+```
+critical_floor  = min(Correctness=74, RedTeam=60, Safety=65) = 60
+weighted_mean   = (Correctness*2 + DesignFaithfulness + RedTeam*2 + Implementability
+                    + Safety*2 + Efficiency + Completeness + Consistency + Calibration) / 11
+                = (74*2 + 81 + 60*2 + 68 + 65*2 + 85 + 65 + 68 + 70) / 11
+                = (148 + 81 + 120 + 68 + 130 + 85 + 65 + 68 + 70) / 11
+                = 835 / 11
+                = 75.9 → 76
+overall         = min(60, 76) = 60
+```
+
+**Overall confidence: 60 / 100**
+
+(Round-1 overall was 52. This is genuine, verifiable progress — four of five blocking items are fully closed with concrete evidence — but the round's central item, the RC-2-shaped side channel, is only half-closed, and the critical floor (Red-team resistance, Safety) still sits below 70.)
+
+## Verdict
+
+**needs-revision**
+
+Specific blocking changes required to clear 80 (and to clear the 70 CRITICAL floor on Red-team resistance and Safety):
+
+1. Extend the read-side closure from `ObservabilityPort.score()` to `AnalyticsStore` concretely: either (a) add the same class of static/import-level admission check §6.1 gives `TruthStore` — "no SOLVE candidate imports or constructs the `AnalyticsStore` adapter" (or, if some SOLVE-side use of `AnalyticsStore` is actually intended, a content-based exclusion of `§19` gate/calibration rows from whatever view SOLVE can reach) — with a named test (e.g. `test_solve_candidate_cannot_import_analytics_store`), or (b) explicitly wire `AnalyticsStore` so it is never part of any SOLVE-reachable bundle at all (mirroring the unredacted-`TruthStore`-handle pattern: "the unredacted handle exists only on the JUDGE side," DATA-LAYER.md:190) and state that placement in §11.2/§2.1 concretely, not just in the "run in JUDGE" aside.
+2. State explicitly whether the embedded tier's physical backing (the JSONL trace file, the SQLite administrative-events table) is reachable from the §17.3 Stage-1 sandbox subprocess, and if it must not be, name the isolation mechanism (filesystem permissions, container/namespace boundary, or equivalent) the way §17.1 names JUDGE's "separate address space" backstop.
+3. Resolve the "JUDGE-emitted" tension: either state plainly that `trace()` is SOLVE-callable (and correct the §5 schema-line parenthetical to not claim blanket JUDGE-emission), or state that all `trace()` calls — including ones invoked from SOLVE-side code — are mediated by a JUDGE-owned write path (mirroring `component_invoked`), and say so explicitly in §11.2 rather than leaving it inferable only from the asymmetric invariant-1 wording.
+4. Specify the `Bundles`/`Stores` extension that "the solve bundle's ObservabilityPort" (§11.2) presupposes — name the field(s) added to `Bundles`/`Stores` (or the parallel structure) so a developer has something concrete to build, matching the precision §2.1 gives the `judge`/`solve` `TruthStore` split.
+5. Soften "closes the RC-2-shaped side-channel" to scope the claim to what is actually closed (the `ObservabilityPort.score()` method), and add an explicit "honest scope" caveat for the `AnalyticsStore` gap — matching the hedging discipline this same document already practices in §17.6 for an analogous residual-exposure case.
+
+Non-blocking, carried forward from round 1 (not required to clear 80, but still open and worth tracking): the `correlation_id` discriminator across `occurrence_id`/`checkpoint_id`/`schedule_id` remains unspecified; `rebuild_analytics`'s concrete semantics for SQLite-views-over-Truth remain unaddressed; no backpressure/queue-depth bound is stated for the emit-and-forget buffer; `ObservabilityPort` still has no read/query method of its own (all reads go through `AnalyticsStore`, which sharpens rather than resolves item 1 above); no BUILD-SPECS.md companion entry exists for AUT-2.
