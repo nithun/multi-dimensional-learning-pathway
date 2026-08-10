@@ -2,6 +2,8 @@
 
 **Written:** 2026-07-30, at the end of a long working session, immediately before a **Claude login change**. The next session starts with **zero conversational context** — nothing from prior chats carries over. Everything needed is in this repo; this file is the entry point.
 
+*(Switching Claude accounts? Read `HANDOVER-NEW-LOGIN.md` first — it covers what breaks and what to re-establish; then come back here.)*
+
 **Read in this order:** this file → `.claude/memory/project-profile.md` (living state) → `.claude/memory/lessons.md` (L-001…L-014, the standing rules) → `CLAUDE.md` (framework protocol) → whatever the task touches.
 
 ---
