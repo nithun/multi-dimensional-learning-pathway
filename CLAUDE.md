@@ -138,6 +138,7 @@ Together these close the loop whether or not anyone is watching — the exact la
 
 ## Where to go next
 
+- **New session / new operator?** Read **`CONTINUE-HERE.md`** first — state of play, hard rules, what's next, and the session-history index.
 - **Starting a task?** Read `WORKFLOW.md` for the task-type → path map.
 - **Project still UNPROFILED?** The curator runs `scout` on first real activity; you don't trigger it.
 - **Want to see how it evolves?** Read `EVOLUTION-LOG.md`, then `docs/evolution/` and `.claude/memory/evolution-log.jsonl`.
