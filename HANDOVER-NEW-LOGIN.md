@@ -17,11 +17,14 @@ All project substance is version-controlled and pushed (`origin/main`):
 - **Framework memory:** `.claude/memory/project-profile.md`, `lessons.md` (L-001…L-014), `patterns.md`, `glossary.md`, `interactions.jsonl` (IX-001…IX-046), `evolution-log.jsonl` (EV-001…EV-092), `circuit-breaker.json`, `backlog.md`.
 - **Hooks:** `.claude/settings.json` (SessionStart → `scripts/orient.sh`; Stop → `scripts/reflect-hook.sh`) is committed and will fire under any login.
 
-### ⚠️ Does NOT survive — Claude-account-bound, must be re-established
+### ⚠️ Account-bound *or* uncertain — verify, then re-establish only what's actually missing
+
+> **Correction (2026-07-30, after verifying on disk):** an earlier draft of this file claimed the user-level memory and session transcripts are lost with the account. That was wrong. Both live under `~/.claude/projects/<project-path-slug>/`, which is keyed by **project path, not by account** — verified present: 7 transcripts, ~75 MB, Jul 13 → Aug 10, plus `memory/`. They are **machine-local**, so they survive a login change on this Mac and are lost only on a *machine* change. What genuinely resets is **authentication** (rows 3–5 below). The table now reflects that.
+
 | What | Impact | Action |
 |---|---|---|
-| **User-level memory store** (`~/.claude/projects/<slug>/memory/`) | Held the scope rule. New account = empty. | Rescued verbatim to `.claude/memory/user-memory-scope-mdlp-only.md` — re-save it as a user memory in the new login (§3). Substance is already enforced as **L-012**, so nothing is lost either way. |
-| **Session transcripts** (`~/.claude/projects/<slug>/*.jsonl`) | The `curator` agent digests these to reconstruct interactions. A fresh account has none — **the conversational history of this project is not recoverable under the new login.** | Nothing to fix. This is *why* `interactions.jsonl` + `CONTINUE-HERE.md` exist — the durable record is in the repo. Don't ask the curator to "catch up on past sessions"; there are none to read. |
+| **User-level memory store** (`~/.claude/projects/<slug>/memory/`) | Path-keyed → **very likely persists** on this machine. Only genuinely gone if the new login starts a fresh store or you move machines. | Check `ls ~/.claude/projects/-Users-samyoga-Documents-Claude-Projects-Multi-Dimensional-Learning-Pathway/memory/`. If empty, re-save from `.claude/memory/user-memory-scope-mdlp-only.md` (§3). Either way the rule holds — it is **L-012** in `lessons.md`. |
+| **Session transcripts** (`~/.claude/projects/<slug>/*.jsonl`) | Path-keyed → **the bytes persist on disk** (verified). The only open question is whether the app's own session-resume UI lists them for a different account — which does not affect readability. | Nothing to fix. Any agent can read them directly (that is exactly how the `curator` digests sessions). The distilled, human-readable record is in the repo regardless (`interactions.jsonl`, `CONTINUE-HERE.md`). **Back this directory up before any machine change** — 75 MB, not in git by design. |
 | **MCP server OAuth** (github, notion, linear, slack, atlassian, figma, datadog, …) | All show as needing auth. None were used for this project's work. | Re-authorize only if you actually need one. **Not required** for MDLP work. |
 | **Headless `claude` auth** (used by the curator daemon) | Already failing `401 OAuth access token has been revoked` — plausibly *because* of this login change. | See §4 — the daemon is formally dropped; re-check only if you want to revive it. |
 | **Available skills/plugins & model access** | The skill list is account/plugin-bound and shifted several times during the last session. | Nothing to do. No MDLP workflow depends on an optional skill — the gate runs on `.claude/agents/`, which is in the repo. |
@@ -33,6 +36,7 @@ These are gitignored — they persist on this machine, and would be lost on a *m
 - `.claude/memory/triage.json` — recomputed every interaction, safe to lose.
 - `.claude/memory/chats/` — a framework leftover, deliberately never committed.
 - **macOS Full Disk Access** for the terminal/Claude app — per-application, not per-account.
+- **`~/.claude/projects/<project-path-slug>/`** — the transcript + user-memory store, keyed by project path (see the correction above). Machine-local, ~75 MB, outside git.
 
 ---
 
@@ -93,7 +97,7 @@ Full original at `.claude/memory/user-memory-scope-mdlp-only.md`. It is also **L
 - [ ] SessionStart banner appears without permission errors (§2)
 - [ ] Re-saved the scope memory, or consciously relying on L-012 (§3)
 - [ ] Read `CONTINUE-HERE.md` (project state, hard rules, next moves)
-- [ ] Understood that prior conversational history is gone by design — the repo is the record (§1)
+- [ ] Confirmed the transcript/memory store is still present (`ls ~/.claude/projects/-Users-samyoga-Documents-Claude-Projects-Multi-Dimensional-Learning-Pathway/`) — expect ~7 `.jsonl` files + `memory/` (§1)
 - [ ] Decided whether to revive the daemon (§4) — default is *no*
 - [ ] Optional cleanup: `git branch -d research/external-repo-study-2026-07-13` (fully merged)
 

@@ -1,6 +1,6 @@
 # CONTINUE HERE — session continuity brief
 
-**Written:** 2026-07-30, at the end of a long working session, immediately before a **Claude login change**. The next session starts with **zero conversational context** — nothing from prior chats carries over. Everything needed is in this repo; this file is the entry point.
+**Written:** 2026-07-30, at the end of a long working session, immediately before a **Claude login change**. The next session starts with **zero conversational context** — a new chat never inherits an old one. (The raw transcripts do remain on this machine under `~/.claude/projects/<project-path-slug>/`, since that store is keyed by project path, not by account — but they are 75 MB of JSONL, not a briefing.) Everything needed is distilled into this repo; this file is the entry point.
 
 *(Switching Claude accounts? Read `HANDOVER-NEW-LOGIN.md` first — it covers what breaks and what to re-establish; then come back here.)*
 
