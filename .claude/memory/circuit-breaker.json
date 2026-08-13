@@ -2,9 +2,9 @@
   "_doc": "Safety state machine for self-edits. A non-open lane makes edits in that lane proposals, not direct writes. Only the user reopens a closed lane.",
   "mode": "aggressive",
   "thresholds": { "revert_or_ineffective_pause_after_n": 2, "rolling_window_edits": 5 },
-  "skills": { "status": "open", "recent_outcomes": ["effective:EV-42-spec-change-gate-skill-2026-07-28-audit", "still-blocked:no-spawn-tool-2026-07-28-audit-3rd-recurrence"] },
+  "skills": { "status": "open", "recent_outcomes": ["effective:EV-42-spec-change-gate-skill-2026-07-28-audit", "still-blocked:no-spawn-tool-2026-07-28-audit-3rd-recurrence", "ineffective:EV-77-skill-checklist-2026-08-13-audit-recurred-immediately"], "note": "1/2 skill edits ineffective (not >=2 of last 5 -- open, not paused). Refined (not reapplied) via EV-102 RAF-7 devices this run; watch B-005 -- a 3rd post-lesson recurrence trips the pause threshold." },
   "agents": { "status": "open", "recent_outcomes": ["effective:EV-1-review-360-2026-07-02-audit", "effective:EV-1-change-approver-2026-07-02-audit"] },
-  "memory": { "status": "open", "recent_outcomes": ["effective:EV-43-L012-2026-07-28-audit", "neutral:EV-40-L011-2026-07-28-audit", "effective:EV-41-EV-44-backlog-tracking-2026-07-28-audit"] },
-  "last_run": "2026-07-28",
-  "last_updated": "2026-07-28T00:00:00Z"
+  "memory": { "status": "open", "recent_outcomes": ["effective:EV-43-L012-2026-07-28-audit", "neutral:EV-40-L011-2026-07-28-audit", "effective:EV-41-EV-44-backlog-tracking-2026-07-28-audit", "ineffective:EV-75-L013-2026-08-13-audit-recurred-immediately", "neutral:EV-76-L014-2026-08-13-audit-insufficient-exercise", "effective:EV-78-backlog-tracking-2026-08-13-audit"] },
+  "last_run": "2026-08-13",
+  "last_updated": "2026-08-13T00:00:00Z"
 }
