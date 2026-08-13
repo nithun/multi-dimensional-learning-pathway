@@ -9,7 +9,7 @@ _Last profiled: 2026-08-13 by scout (deep pass — verified the inline-accumulat
 - The repo also carries the **Turing Agents v0.2.0** self-evolving scaffold (Markdown + Bash) the research runs on. [verified]
 
 ## Branch / working-tree situation (2026-08-13)
-- HEAD = **`main`**, **16 commits ahead of `origin/main`, unpushed** — the entire 2026-08-12/13 research arc (4 studies + 4 notes + SYNTHESIS + PLAN-harvest + RELEASE-PLAN-v2 update) plus the 2026-08-13 retrospective's 7-commit `evolve:` stack. Pushing is the user's call. [verified — `git rev-list --count origin/main..main` = 16]
+- HEAD = **`main`**, **fully pushed** (verified 2026-08-13 after the S21/DL-§12 gate wave: `git rev-list --count origin/main..main` = 0). The 2026-08 arc, the retrospective/scout `evolve:` stacks, the site update, and both gate-approved deltas (§21, DL §12) are all on origin. Verify push state at session start as always. [verified]
 - Branches: `research/external-repo-study-2026-07-13` (fast-forward merged 2026-07-28, fully merged, safe to delete) and `self-learning-agents-research` (historical) still exist. [verified — git branch]
 - Working tree clean except the perpetual untracked `.claude/memory/chats/` (framework leftover, deliberately uncommitted). [verified — git status]
 
