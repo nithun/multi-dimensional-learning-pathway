@@ -89,6 +89,16 @@ it:
    `grep` it across every file that cites it (the algorithm doc, `DATA-LAYER.md`,
    `BUILD-SPECS.md`, any linked `IMPLEMENTATION-v2.md` section) and confirm every hit is
    consistent with the new definition — not just the location you edited.
+4. **Property-impact statement (ALGORITHM §21.3).** The submission text handed to
+   `review-360` must state, for each safety property PR-1..PR-9 in ALGORITHM §21.1:
+   *preserved*, *strengthened*, or *modified-with-argument* (name the property, argue the
+   replacement maintains it). A submission without this statement fails this checklist
+   and is returned before review; a change that weakens a property without argument
+   fails in review on that ground. **Presence-checking a cited guard's name is not
+   truth-checking the property** — the S21 round-1 review caught a property whose cited
+   guards all existed while the property itself was false against §9; when a property
+   statement is universal, verify it against the *text of every mechanism it cites*,
+   not just that the citations resolve.
 
 *Source: L-013, `interactions.jsonl` IX-039 (2026-07-13); evolution-log.jsonl EV-48, EV-51,
 EV-53, EV-54, EV-56, EV-57, EV-59, EV-60, EV-61, EV-65, EV-66, EV-67 name this exact class
