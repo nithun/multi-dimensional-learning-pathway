@@ -98,6 +98,51 @@ B2-amendA round 4. All three artifacts eventually reached APPROVED once a round 
 did all three steps above before resubmission (S17-6 round 7 = 84; DL-write-discipline
 round 12 = 83; B2-amendA round 8 = 85).*
 
+## Legibility devices (RAF-7) — use when the self-checklist alone hasn't been enough
+
+**Self-audit finding (2026-08-13):** the pre-submission checklist above (L-013,
+landed 2026-07-28) did not prevent its own target defect from recurring — the
+very next gated artifact submitted after it landed (`DL-observability-roles`,
+round 1, 2026-07-30) reproduced the identical class verbatim: a `§11.3`
+citation pointing at a `§5` schema that was never written. `review-360` caught
+it and named the lesson by id in its own report — the gate held, but the
+round was still spent on a defect the checklist exists to prevent
+pre-submission. A checklist the same author re-reads before resubmitting is
+necessary but evidently not sufficient; these three devices route the check
+through someone (or something) other than the author's own memory:
+
+1. **(a) Explain-it-back.** Before submitting a round, have an agent that has
+   **not** read the diff or any prior review read the amended section cold
+   and explain the mechanism back in its own words. Divergence from intent is
+   a finding, not a style note — this is Ousterhout's own warning (he could
+   follow Raft's proof and still not understand the algorithm) applied at
+   authoring time instead of after.
+2. **(b) A cut step.** Before submitting, run an explicit "does every sentence
+   here still serve the goal — what can be removed?" pass. `review-360` scores
+   correctness, completeness, risk, and contradiction, but nothing that
+   opposes growth (F-G: no compression term) — so approved changes ratchet by
+   construction unless something outside the gate cuts.
+3. **(c) Weak-spot → rule.** Before submitting a new relation, schema type, or
+   invariant, deliberately solicit its weak spots and convert each one into a
+   stated constraint — don't wait for a review round to trip over a missing
+   one. This is the direct fix for the reactive-constraint pattern (L-018):
+   the L-013 defect class itself, B2 Amendment A's acyclicity check arriving
+   as a late-round catch, and the unnamed constraint inventory in
+   `STUDY-ontologies-for-mdlp.md` §2 are three sightings of the same gap.
+   Complements `ONT-3` (gated spec work: derive constraints from OntoClean
+   meta-properties) with an elicitation move that needs no theory.
+
+Device (c) is the only one of the three that changes *how* an artifact is
+authored rather than what it says — run it first if only one is affordable.
+None of these replace the pre-submission checklist above; they exist because
+the checklist alone measurably wasn't enough.
+
+*Source: `STUDY-ontologies-and-raft.md` §7 (RAF-7), `docs/research/PLAN-harvest-2026-08.md`
+§2 WP-A ("RAF-7 is a framework-side change... lands as `evolve:` commits now");
+self-audit evidence: `docs/research/reviews/DL-observability-roles-review.md:30-31`
+(names L-013/EV-75 explicitly); `.claude/memory/evolution-log.jsonl` EV-9x
+(2026-08-13 audit, EV-75/EV-77 classified `ineffective`).*
+
 ## Round-numbering / file-naming convention
 
 Observed directly in `docs/research/reviews/`:
