@@ -30,6 +30,8 @@ The standard that actually validates is **SHACL**: closed-world semantics (unsta
 
 ### 2.1 ADOPT — O1…O6
 
+> **⚠ O1 is revised by `STUDY-ontologies-for-mdlp.md` §2.** O1 says the slot is cut but empty. In fact **B2 Amendment A already validates union-scoped acyclicity inside `merge()`, reporting via `MergeReport.rejected`, for both grown and authored edges** — the mechanism is built and approved. The real gap is the constraint *inventory*, not the enforcement point, which makes ONT-1 cheaper and better-founded than written below. Read O1 with that correction.
+
 **O1 — MDLP's missing gate has a slot already cut for it, and the slot is `merge()`.**
 §6.2 declares `GraphStore.merge(delta: GraphDelta) -> MergeReport` **the only projection write path**, and `MergeReport` already carries `rejected: [(id, reason)]`. That is a validation-report shape, in the one place every structural write must pass through. A **structural admissibility check between EXTRACT and MERGE** requires *no architectural change* — it is a new phase inside an existing two-phase discipline, writing into an existing report field. This is an unusually clean fit and it is the single most actionable item in this study.
 
