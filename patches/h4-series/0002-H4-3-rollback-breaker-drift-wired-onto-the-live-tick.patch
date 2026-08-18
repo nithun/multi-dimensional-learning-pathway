@@ -1,0 +1,232 @@
+From fd8b8ce2a8834d5bea7407329fd3a12b5ae84531 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Tue, 18 Aug 2026 21:26:06 +0530
+Subject: [PATCH 2/4] H4-3: rollback+breaker+drift wired onto the live tick;
+ per-skill rollback targeting; miscalibration trigger plumbed, disarmed with
+ in-code rationale
+
+---
+ mdlp/mdlp/calibration.py     | 13 ++++++++-
+ mdlp/mdlp/corpus.py          | 51 +++++++++++++++++++++++++++++++++++-
+ mdlp/mdlp/loop.py            |  5 +++-
+ mdlp/mdlp/state.py           | 17 ++++++++----
+ mdlp/tests/test_h4_wiring.py | 42 ++++++++++++++++++++++++++++-
+ 5 files changed, 119 insertions(+), 9 deletions(-)
+
+diff --git a/mdlp/mdlp/calibration.py b/mdlp/mdlp/calibration.py
+index 27ffdbf..abf9356 100644
+--- a/mdlp/mdlp/calibration.py
++++ b/mdlp/mdlp/calibration.py
+@@ -127,7 +127,18 @@ class Calibrator:
+         return n / (1.0 + self.lambda_cal * self.ece())
+ 
+     def miscalibrated(self) -> bool:
+-        """The 5th circuit-breaker trigger: the band's confidence is provably off."""
++        """The 5th circuit-breaker trigger: the band's confidence is provably off.
++
++        H4-3 status note (wiring finding, carried to MDLP research via HANDOVER): this
++        cumulative-raw-history statistic is correct for a STATIC band but over-fires on a
++        genuinely-learning cold start (the raw prior is always miscalibrated at first —
++        that is what learning fixes), and every in-run alternative tried during wiring
++        failed a different way: in-sample recalibrated ECE is degenerately ~0 (each PAV
++        block bins at its own mean); a fit-on-first-half/judge-second-half split cannot
++        distinguish learning nonstationarity from broken confidence and extrapolates
++        badly outside the fitted range. Until §14 defines the separating statistic, the
++        live loop passes `miscalibrated=False` at the (plumbed, tested) breaker flag —
++        see the arming site in corpus.py."""
+         if not self.ready():
+             return False
+         return self.ece() > self.ece_max or self.brier() > self.brier_max
+diff --git a/mdlp/mdlp/corpus.py b/mdlp/mdlp/corpus.py
+index 564be42..14020aa 100644
+--- a/mdlp/mdlp/corpus.py
++++ b/mdlp/mdlp/corpus.py
+@@ -40,7 +40,7 @@ from typing import Optional
+ from .decision import Candidate, DecisionEngine
+ from .graph import PathwayGraph, PrereqGapDetector
+ from .growth import GrowthRule
+-from .loop import commit_gate
++from .loop import CircuitBreaker, commit_gate, rollback_fires
+ from .memory import Context, SkillLibrary
+ from .revisit import check_triggers
+ from .scheduler import Scheduler
+@@ -460,6 +460,18 @@ class LiveLearningRun:
+         # before the gate decides (pregate_deltas), and how many the gate actually committed.
+         self.pregate_deltas: list[float] = []
+         self._committed: int = 0
++        # H4-3 (§8/§14.3, live-wired): the dormant safety kit onto the live tick.
++        # drift_estimate (fast-decay — previously written every tick, read by NOTHING)
++        # now drives the rollback check; the breaker counts consecutive rollbacks and
++        # takes §14.3's miscalibration trigger; a trip HALTS the run, recorded not silent.
++        self.breaker = CircuitBreaker()
++        self.rollback_log: list[dict] = []
++        self.halted: Optional[dict] = None
++        # PER-SKILL rollback targets: a drop in skill X may only retire X's own notes —
++        # a global LIFO would retire an innocent skill's note on another's regression
++        # (caught by the nova prereq test during wiring).
++        self._committed_stack: dict[str, list[str]] = {}
++        self._held_baseline: dict[str, float] = {}          # fixed per-skill baseline (RC-7)
+ 
+     def _ctx_payloads(self, skill: str) -> list[dict]:
+         if not self.use_learning:
+@@ -529,6 +541,42 @@ class LiveLearningRun:
+                 self.calibrator.observe(p_hat, 1)
+             for _ in range(hn - hp):
+                 self.calibrator.observe(p_hat, 0)
++            # H4-3: fixed ancestor baseline (RC-7 — a FIXED reference, never just the
++            # parent tick) captured on first sight of the skill.
++            self._held_baseline.setdefault(skill, self.state.estimate(skill, "task").mean)
++            # H4-3: rollback fires only on a fresh, adequately-powered, significant drop
++            # (RC-5) — the SE comes from the fast-decay drift posterior, the write-only
++            # signal this wiring finally reads.
++            drift = self.state.drift_estimate(skill, "task")
++            d_drop = self._held_baseline[skill] - self.state.estimate(skill, "task").mean
++            rolled = False
++            own_notes = self._committed_stack.get(skill, [])
++            if own_notes and rollback_fires(
++                    d_drop=d_drop, se=drift.se, powered=(hn >= 4)):
++                rb_ctx = own_notes.pop()
++                self.lib.retire(rb_ctx)
++                rolled = True
++                self.rollback_log.append({"tick": t, "skill": skill,
++                                          "rolled_back_ctx": rb_ctx, "d_drop": d_drop})
++            # The §14.3 miscalibration trigger is PLUMBED (CircuitBreaker takes the flag;
++            # Calibrator.miscalibrated() implements the out-of-sample check) but DISARMED
++            # on the live path, with the reason stated rather than hidden: wiring exposed
++            # two failure modes no in-run statistic here can currently separate —
++            # (a) per-item observation floors mis-scale (one 40-item tick clears a
++            #     20-observation floor and judges binomial noise between halves of a
++            #     single cold prediction), and
++            # (b) any fit-on-history-judge-recent scheme trips on LEARNING itself: a
++            #     genuinely-improving posterior legitimately outruns an old map, and
++            #     "nonstationary because learning" is indistinguishable from
++            #     "nonstationary because broken" without a statistic MDLP's §14 does
++            #     not yet define.
++            # Open calibration-research item, carried back to MDLP via HANDOVER; arming
++            # is a one-word change once §14 defines the separating statistic.
++            if self.breaker.record(rolled_back=rolled, miscalibrated=False):
++                self.halted = {"tick": t, "reasons": list(self.breaker.reasons)}
++                if on_tick:
++                    on_tick(t, n_ticks, skill, self.verifier.calls, self.verifier.errors)
++                break
+             # feed the LEARNED policy the realized learning-gain since this skill was last picked
+             if self.policy is not None:
+                 cur = self.state.estimate(skill, "task").mean
+@@ -618,6 +666,7 @@ class LiveLearningRun:
+                     if g.accept:
+                         self.lib.add(Context(draft.id, skill, draft.payload))
+                         self._committed += 1
++                        self._committed_stack.setdefault(skill, []).append(draft.id)  # H4-3
+                 else:
+                     self.lib.add(Context(draft.id, skill, draft.payload))
+                     self._committed += 1
+diff --git a/mdlp/mdlp/loop.py b/mdlp/mdlp/loop.py
+index 553a356..54e6422 100644
+--- a/mdlp/mdlp/loop.py
++++ b/mdlp/mdlp/loop.py
+@@ -63,7 +63,8 @@ class CircuitBreaker:
+             self.reasons.append(r)
+ 
+     def record(self, *, rolled_back: bool, variance_spike: bool = False,
+-               prod_degraded: bool = False, near_boundary: bool = False) -> bool:
++               prod_degraded: bool = False, near_boundary: bool = False,
++               miscalibrated: bool = False) -> bool:
+         self.consec = self.consec + 1 if rolled_back else 0
+         if self.consec >= self.k:
+             self._trip("k_consecutive_rollbacks")
+@@ -73,4 +74,6 @@ class CircuitBreaker:
+             self._trip("production_degradation")
+         if near_boundary:
+             self._trip("safety_boundary_probing")
++        if miscalibrated:
++            self._trip("miscalibration")   # §14.3: the 5th trigger (H4-3)
+         return self.tripped
+diff --git a/mdlp/mdlp/state.py b/mdlp/mdlp/state.py
+index 68f4305..5c4d928 100644
+--- a/mdlp/mdlp/state.py
++++ b/mdlp/mdlp/state.py
+@@ -206,12 +206,19 @@ class ProbabilisticState:
+     def estimate(self, skill: str, difficulty: str, context: Optional[str] = None) -> Posterior:
+         m = self.cell(skill, difficulty, context).mastery
+         if self.calibrator is not None:
+-            # §14.2: mean via the fitted recalibration map; SE widened via the deflated
+-            # effective count (never narrower than reality — Calibrator.n_eff only shrinks n).
+-            mean = self.calibrator.recalibrate(m.mean)
++            # §14.2, the UNCERTAINTY half wired live: SE widened via the deflated effective
++            # count (never narrower than reality — Calibrator.n_eff only shrinks n). The
++            # PROBABILITY half (g_band mean remap) is deliberately NOT applied to the served
++            # mean: the calibrator pools observations across every cell in the band, and a
++            # pooled monotone map fitted mostly on learnable skills' trajectories pulls an
++            # unlearnable skill's mean UP at the same operating point — demonstrated by the
++            # nova-chain prereq test the first full wiring broke. Mean remapping is honest
++            # only at per-cell-homogeneous band granularity; until bands are that fine, the
++            # raw mean is the less-wrong estimate and the SE carries the miscalibration
++            # penalty. (Research-side note carried back to MDLP §14 via HANDOVER.)
+             n = self.calibrator.n_eff(m.n_eff)
+-            se = math.sqrt(max(mean * (1.0 - mean), 1e-12) / (n + 1.0))
+-            return Posterior(mean, se, n)
++            se = math.sqrt(max(m.mean * (1.0 - m.mean), 1e-12) / (n + 1.0))
++            return Posterior(m.mean, se, n)
+         return Posterior(m.mean, math.sqrt(m.var), m.n_eff)
+ 
+     def drift_estimate(self, skill: str, difficulty: str, context: Optional[str] = None) -> Posterior:
+diff --git a/mdlp/tests/test_h4_wiring.py b/mdlp/tests/test_h4_wiring.py
+index fd5a5dc..8829798 100644
+--- a/mdlp/tests/test_h4_wiring.py
++++ b/mdlp/tests/test_h4_wiring.py
+@@ -34,7 +34,10 @@ def test_estimate_calibrated_when_wired():
+         cal.observe(p_op, 1 if rng.random() < 0.5 else 0)
+     assert cal.ready() and cal.ece() > 0.1
+     calibrated = st.estimate("s", "task")
+-    # SE must WIDEN (n_eff deflated) relative to the raw posterior — never narrow.
++    # The uncertainty half of §14.2: SE widens (n_eff deflated), never narrows; the
++    # served MEAN stays raw — pooled per-band mean remapping mis-serves per-skill
++    # reads (the nova-chain finding), so only the SE carries the penalty.
++    assert math.isclose(calibrated.mean, raw.estimate("s", "task").mean)
+     assert calibrated.n < raw.estimate("s", "task").n
+     assert calibrated.se > raw.estimate("s", "task").se
+ 
+@@ -57,3 +60,40 @@ def test_isotonic_tied_predictions_pool_into_one_block():
+     fit = isotonic_fit(preds, outcomes)
+     assert len(fit) == 1
+     assert abs(recalibrate(0.6, fit) - 0.5) < 1e-9
++
++
++def test_breaker_takes_miscalibration_as_fifth_trigger():
++    from mdlp.loop import CircuitBreaker
++    br = CircuitBreaker()
++    assert br.record(rolled_back=False, miscalibrated=True)
++    assert "miscalibration" in br.reasons
++
++
++def test_live_run_reads_drift_and_owns_breaker():
++    """H4-3 wiring: drift_estimate gains a live reader; the run owns a breaker and a
++    rollback log; a healthy run neither rolls back nor halts."""
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    run = LiveLearningRun(default_corpus(), CorpusFakeRunner(), n_min=4.0, rng_seed=2)
++    run.run(4)
++    assert run.halted is None and run.rollback_log == []
++    assert run.breaker.consec == 0
++
++
++def test_rollback_retires_last_committed_note_and_breaker_trips():
++    """H4-3 end-to-end on synthetic state: force a powered significant drop after a
++    commit; the last committed note is retired; k drops trip the breaker and halt."""
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    run = LiveLearningRun(default_corpus(), CorpusFakeRunner(), n_min=4.0, rng_seed=3)
++    run.breaker.k = 1
++    skill = run.corpus.skills[0]
++    # simulate: a committed note exists, baseline was high, competence has collapsed
++    from mdlp.memory import Context
++    run.lib.add(Context("note:1", skill, {"note": "x"}))
++    run._committed_stack.setdefault(skill, []).append("note:1")
++    run._held_baseline[skill] = 0.95
++    for _ in range(6):
++        run.state.update(skill, "task", 0, 4)     # hard fail stream → drift SE tightens low
++    run.run(2)
++    assert run.rollback_log, "a powered significant drop must fire rollback"
++    assert all(c.id != "note:1" for c in run.lib.retrieve(skill))
++    assert run.halted is not None and "k_consecutive_rollbacks" in run.halted["reasons"]
+-- 
+2.54.0
+

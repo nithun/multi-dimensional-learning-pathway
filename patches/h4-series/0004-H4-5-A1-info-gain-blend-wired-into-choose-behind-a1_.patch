@@ -1,0 +1,186 @@
+From ab2ad6e9b49d9ba4dbd60d1d9b14f175566cb0cb Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Tue, 18 Aug 2026 21:29:25 +0530
+Subject: [PATCH 4/4] H4-5: A1 info-gain blend wired into choose() behind a1_w
+ (0.0 = byte-identical M0 path, tested); LiveLearningRun exposes a1_w as the
+ live call site
+
+---
+ mdlp/mdlp/corpus.py          |  8 ++++--
+ mdlp/mdlp/decision.py        | 56 +++++++++++++++++++++++++++++-------
+ mdlp/tests/test_h4_wiring.py | 42 +++++++++++++++++++++++++++
+ 3 files changed, 93 insertions(+), 13 deletions(-)
+
+diff --git a/mdlp/mdlp/corpus.py b/mdlp/mdlp/corpus.py
+index 14020aa..4b95888 100644
+--- a/mdlp/mdlp/corpus.py
++++ b/mdlp/mdlp/corpus.py
+@@ -398,7 +398,8 @@ class LiveLearningRun:
+     def __init__(self, corpus: CodeCorpus, runner, *, use_learning: bool = True,
+                  use_gate: bool = True, inject_cheat: bool = False,
+                  n_min: float = 8.0, rng_seed: int = 0, policy=None,
+-                 prereqs: Optional[dict[str, str]] = None):
++                 prereqs: Optional[dict[str, str]] = None,
++                 a1_w: float = 0.0):
+         from .adapters.learning import LiveRunnerVerifier
+         from .adapters.runner import exact_check
+         self.corpus = corpus
+@@ -450,7 +451,10 @@ class LiveLearningRun:
+         # unfired (never fabricated) rather than faked to look complete.
+         self.revisit_trigger_log: list[dict] = []
+         import random
+-        self.decision = DecisionEngine(self.state, rng=random.Random(rng_seed), f_min=0.5)
++        # H4-5: a1_w defaults to 0.0 — the M0-measured Thompson-LP path, byte-identical;
++        # a1_w > 0 engages the A1 info-gain blend at this, the live call site.
++        self.decision = DecisionEngine(self.state, rng=random.Random(rng_seed), f_min=0.5,
++                                       a1_w=a1_w)
+         # optional LEARNED routing policy (P3): if given (duck-typed choose+observe), it
+         # replaces the hand-designed DecisionEngine and is fed the realized learning-gain.
+         self.policy = policy
+diff --git a/mdlp/mdlp/decision.py b/mdlp/mdlp/decision.py
+index 615430f..d82b9dc 100644
+--- a/mdlp/mdlp/decision.py
++++ b/mdlp/mdlp/decision.py
+@@ -13,14 +13,12 @@ so it would be chosen forever. π instead maximizes EXPECTED LEARNING GAIN
+ 
+ Cost is a HARD budget constraint (filter), never a soft penalty term.
+ 
+-⚠ A1 STATUS (M1, 2026-07): the exact BUILD-SPECS A1 info-gain objective
+-(`U(a) = (1-w)*z(E[delta_competence|a]) + w*z(EIG(a))`) is NOT wired into `choose()` above —
+-that method is still the original Thompson-sampled-LP policy, which is what the M0 GO was
+-measured on (changing it now would invalidate that result). What follows (`digamma`,
+-`beta_entropy`, `expected_info_gain`) are A1's closed-form EIG PRIMITIVES, added here (per the
+-spec's own package map: "decision.py — learning-gain + A1 info-gain") because §15 and §16 both
+-need them ("reuses A1's closed form"). Wiring them into `choose()`'s actual selection blend is
+-a deliberately separate follow-up, not done as part of building §15/§16.
++A1 STATUS (H4-5, 2026-08): the BUILD-SPECS A1 info-gain objective
++(`U(a) = (1-w)*z(E[delta_competence|a]) + w*z(EIG(a))`) IS now wired into `choose()`,
++gated by `a1_w`: at the default `a1_w = 0.0` the method takes the EXACT original
++Thompson-sampled-LP code path — byte-identical to what the M0 GO was measured on, so
++that result stays valid — and `a1_w > 0` engages the A1 blend with both terms z-scored
++across the candidate set (RC-1). `LiveLearningRun(a1_w=...)` is the live call site.
+ """
+ from __future__ import annotations
+ 
+@@ -58,13 +56,20 @@ def reach_blend(q: float, rw: float) -> float:
+ 
+ class DecisionEngine:
+     def __init__(self, state: ProbabilisticState, *, rng: Optional[random.Random] = None,
+-                 budget: float = 1.0, f_min: float = 0.0, lp_window: int = 10, z: float = 2.0):
++                 budget: float = 1.0, f_min: float = 0.0, lp_window: int = 10, z: float = 2.0,
++                 a1_w: float = 0.0):
+         self.state = state
+         self.rng = rng or random.Random(0)
+         self.budget = budget
+         self.f_min = f_min
+         self.lp_window = lp_window
+         self.z = z
++        # H4-5: the A1 info-gain blend weight `w`. 0.0 (default) takes the EXACT pre-H4
++        # code path — the Thompson-LP policy the M0 GO was measured on, byte-identical,
++        # so wiring A1 does not invalidate that result. w > 0 engages the BUILD-SPECS A1
++        # objective: U(a) = (1-w)·z(E[Δc|a]) + w·z(EIG(a)), z-scored ACROSS the candidate
++        # set (RC-1: normalized, commensurable terms — no raw-scale knife-edge).
++        self.a1_w = a1_w
+         self._counts: dict[str, int] = {}
+         self._total = 0
+ 
+@@ -86,7 +91,7 @@ class DecisionEngine:
+             if under:
+                 return self._select(self.rng.choice(under))
+ 
+-        best, best_u = None, float("-inf")
++        draws: list[tuple[Candidate, float, float]] = []            # (cand, q, rw)
+         for c in cands:
+             lp = self.state.learning_progress(c.skill, window=self.lp_window)
+             if significant(lp.mean, lp.se, z=self.z):
+@@ -96,7 +101,36 @@ class DecisionEngine:
+                 est = self.state.estimate(c.skill, c.difficulty)
+                 q = self.rng.gauss(0.0, est.se + 1e-6)
+             rw = reach(c.skill) if reach else 1.0                   # soft reachability (never a hard gate)
+-            u = reach_blend(q, rw)
++            draws.append((c, q, rw))
++
++        if self.a1_w <= 0.0:                                        # M0-identical path (H4-5)
++            best, best_u = None, float("-inf")
++            for c, q, rw in draws:
++                u = reach_blend(q, rw)
++                if u > best_u:
++                    best, best_u = c, u
++            return self._select(best)
++
++        # H4-5: the A1 objective. EIG from the mastery posterior's closed form; both terms
++        # z-scored across the candidate set so they are commensurable (RC-1).
++        eigs = []
++        for c, _q, _rw in draws:
++            m = self.state.cell(c.skill, c.difficulty).mastery
++            eigs.append(expected_info_gain(m.alpha, m.beta))
++        qs = [q for _c, q, _rw in draws]
++
++        def _z(xs: list[float]) -> list[float]:
++            mu = sum(xs) / len(xs)
++            var = sum((x - mu) ** 2 for x in xs) / len(xs)
++            sd = math.sqrt(var)
++            if sd < 1e-12:
++                return [0.0] * len(xs)
++            return [(x - mu) / sd for x in xs]
++
++        zq, ze = _z(qs), _z(eigs)
++        best, best_u = None, float("-inf")
++        for (c, _q, rw), zg, zi in zip(draws, zq, ze):
++            u = reach_blend((1.0 - self.a1_w) * zg + self.a1_w * zi, rw)
+             if u > best_u:
+                 best, best_u = c, u
+         return self._select(best)
+diff --git a/mdlp/tests/test_h4_wiring.py b/mdlp/tests/test_h4_wiring.py
+index 4b0a9c3..a8df65e 100644
+--- a/mdlp/tests/test_h4_wiring.py
++++ b/mdlp/tests/test_h4_wiring.py
+@@ -108,3 +108,45 @@ def test_add_skill_docstrings_state_rebuild_only():
+     assert "REBUILD-ONLY" in LocalGraphStore.add_skill.__doc__
+     from mdlp.stores.full.graph_neo4j import Neo4jGraphStore
+     assert "REBUILD-ONLY" in Neo4jGraphStore.add_skill.__doc__
++
++
++def test_a1_off_is_byte_identical_to_m0_policy():
++    """H4-5: a1_w=0 must take the EXACT original code path — same rng stream, same
++    choices — so the M0 GO stays valid."""
++    import random as _r
++    from mdlp.decision import Candidate, DecisionEngine
++    st1, st2 = ProbabilisticState(n_min=8.0), ProbabilisticState(n_min=8.0)
++    for st in (st1, st2):
++        for _ in range(3):
++            st.update("a", "easy", 2, 2)
++            st.update("b", "easy", 1, 3)
++    e_old = DecisionEngine(st1, rng=_r.Random(7))
++    e_new = DecisionEngine(st2, rng=_r.Random(7), a1_w=0.0)
++    cands = [Candidate("a"), Candidate("b")]
++    for _ in range(10):
++        assert e_old.choose(list(cands)).skill == e_new.choose(list(cands)).skill
++
++
++def test_a1_full_weight_prefers_information_gain():
++    """H4-5: at w=1 the blend is pure z(EIG) — the uncertain cell (higher EIG) must be
++    picked over a data-saturated one, deterministically across seeds."""
++    import random as _r
++    from mdlp.decision import Candidate, DecisionEngine
++    st = ProbabilisticState(n_min=8.0)
++    for _ in range(40):
++        st.update("certain", "easy", 4, 0)          # saturated → tiny EIG
++    st.update("uncertain", "easy", 1, 1)            # thin → larger EIG
++    wins = 0
++    for seed in range(10):
++        e = DecisionEngine(st, rng=_r.Random(seed), a1_w=1.0)
++        if e.choose([Candidate("certain"), Candidate("uncertain")]).skill == "uncertain":
++            wins += 1
++    assert wins == 10
++
++
++def test_live_run_exposes_a1_w():
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    run = LiveLearningRun(default_corpus(), CorpusFakeRunner(), a1_w=0.5, rng_seed=4)
++    assert run.decision.a1_w == 0.5
++    run.run(2)
++    assert run.halted is None
+-- 
+2.54.0
+

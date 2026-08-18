@@ -1,0 +1,192 @@
+From e1c59b62d61866f64c9740eafe921ab5ecf8cff1 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Tue, 18 Aug 2026 20:08:01 +0530
+Subject: [PATCH 1/4] =?UTF-8?q?H4-2=20(=C2=A714):=20calibrator=20wired=20b?=
+ =?UTF-8?q?ehind=20estimate();=20live=20run=20feeds=20it;=20tied-x=20isoto?=
+ =?UTF-8?q?nic=20fix?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ mdlp/mdlp/calibration.py     | 12 +++++++-
+ mdlp/mdlp/corpus.py          | 14 ++++++++-
+ mdlp/mdlp/scheduler.py       |  3 +-
+ mdlp/mdlp/state.py           | 16 +++++++++-
+ mdlp/tests/test_h4_wiring.py | 59 ++++++++++++++++++++++++++++++++++++
+ 5 files changed, 100 insertions(+), 4 deletions(-)
+ create mode 100644 mdlp/tests/test_h4_wiring.py
+
+diff --git a/mdlp/mdlp/calibration.py b/mdlp/mdlp/calibration.py
+index ff5b9e7..27ffdbf 100644
+--- a/mdlp/mdlp/calibration.py
++++ b/mdlp/mdlp/calibration.py
+@@ -54,7 +54,17 @@ def isotonic_fit(preds: list[float], outcomes: list[int]) -> list[tuple[float, f
+         return []
+     blocks: list[list[float]] = []  # [sum_y, weight, x_min, x_max]
+     for x, y in sorted(zip(preds, outcomes)):
+-        blocks.append([float(y), 1.0, x, x])
++        # H4-2 fix: TIED predictions must share one block. Without this, equal-x
++        # observations whose outcomes happen to arrive in ascending order form separate
++        # same-x blocks that PAV never pools (it only pools DESCENDING violations), and
++        # `recalibrate` then returns the FIRST tied block — e.g. 0.0 for a 50/50 outcome
++        # stream at a single p̂, exactly the shape a Beta posterior feeds it. Found by
++        # the H4-2 wiring test; fix and wire in one commit (the repo's own L-044 rule).
++        if blocks and blocks[-1][3] == x:
++            blocks[-1][0] += float(y)
++            blocks[-1][1] += 1.0
++        else:
++            blocks.append([float(y), 1.0, x, x])
+         while len(blocks) >= 2 and (blocks[-2][0] / blocks[-2][1]) > (blocks[-1][0] / blocks[-1][1]):
+             sy2, w2, _xmin2, xmax2 = blocks.pop()
+             sy1, w1, xmin1, _xmax1 = blocks.pop()
+diff --git a/mdlp/mdlp/corpus.py b/mdlp/mdlp/corpus.py
+index 27ed399..564be42 100644
+--- a/mdlp/mdlp/corpus.py
++++ b/mdlp/mdlp/corpus.py
+@@ -406,7 +406,12 @@ class LiveLearningRun:
+         self.use_gate = use_gate
+         self.inject_cheat = inject_cheat
+         self.verifier = LiveRunnerVerifier(runner=runner, check=exact_check)
+-        self.state = ProbabilisticState(n_min=n_min)
++        # H4-2 (§14, live-wired): decision-time predictions vs realized held-out outcomes
++        # feed a per-run Calibrator; estimate() serves the calibrated posterior once the
++        # observation floor is met (identity before that — cold start defers to §8 dials).
++        from .calibration import Calibrator
++        self.calibrator = Calibrator()
++        self.state = ProbabilisticState(n_min=n_min, calibrator=self.calibrator)
+         self.lib = SkillLibrary()
+         self.lib.mark_held_out([t.id for t in corpus.held_out])    # quarantine held-out ids
+         # M1 (RC-3, live-wired): GrowthRule is the actual source of truth for what the loop
+@@ -515,8 +520,15 @@ class LiveLearningRun:
+             skill = pick.skill
+ 
+             # 1) measure current held-out competence through the runner -> update the state
++            # H4-2: log the decision-time prediction BEFORE the update (P1: the prediction
++            # is what the policy believed when it acted, not what hindsight says).
++            p_hat = self.state.estimate(skill, "task").mean
+             hp, hn = self._eval(skill, "held_out")
+             self.state.update(skill, "task", hp, hn - hp)
++            for _ in range(hp):
++                self.calibrator.observe(p_hat, 1)
++            for _ in range(hn - hp):
++                self.calibrator.observe(p_hat, 0)
+             # feed the LEARNED policy the realized learning-gain since this skill was last picked
+             if self.policy is not None:
+                 cur = self.state.estimate(skill, "task").mean
+diff --git a/mdlp/mdlp/scheduler.py b/mdlp/mdlp/scheduler.py
+index 8a232c4..4a860a0 100644
+--- a/mdlp/mdlp/scheduler.py
++++ b/mdlp/mdlp/scheduler.py
+@@ -48,7 +48,8 @@ class Scheduler:
+         self.rho_rev = rho_rev
+         self.rng = rng or random.Random()
+         # B4: the mastery source for S0. Spec names `ProbabilisticState.estimate().mean`
+-        # (the slow-decay, §14-calibrated posterior — NOT `drift_estimate`, which exists
++        # (the slow-decay posterior — §14-calibrated exactly when the state was built with
++        # a Calibrator (H4-2), raw otherwise; NOT `drift_estimate`, which exists
+         # only to answer "am I regressing right now"). Optional so the scheduler stays
+         # usable standalone; absent, S0 falls back to the floor as it did pre-B4.
+         self.mastery = mastery
+diff --git a/mdlp/mdlp/state.py b/mdlp/mdlp/state.py
+index 1eb0bd1..68f4305 100644
+--- a/mdlp/mdlp/state.py
++++ b/mdlp/mdlp/state.py
+@@ -74,7 +74,14 @@ class ProbabilisticState:
+     """The growing competence field. Backed by a StateStore if given, else in-process."""
+ 
+     def __init__(self, store=None, *, prior: tuple[float, float] = (1.0, 1.0),
+-                 gamma_slow: float = 0.995, gamma_fast: float = 0.9, n_min: float = 20.0):
++                 gamma_slow: float = 0.995, gamma_fast: float = 0.9, n_min: float = 20.0,
++                 calibrator=None):
++        # H4-2 (§14.2): an optional Calibrator makes estimate() return the CALIBRATED
++        # posterior — mean through the isotonic map, SE from the deflated n_eff — so every
++        # downstream consumer of estimate() (significant(), Thompson, the gates) inherits
++        # honest confidence automatically. None (the default) is byte-identical to the
++        # pre-H4-2 behavior: calibration is opt-in wiring, not a changed mechanism.
++        self.calibrator = calibrator
+         self.store = store
+         self.prior = prior
+         self.gamma_slow = gamma_slow
+@@ -198,6 +205,13 @@ class ProbabilisticState:
+     # -- read models ---------------------------------------------------------
+     def estimate(self, skill: str, difficulty: str, context: Optional[str] = None) -> Posterior:
+         m = self.cell(skill, difficulty, context).mastery
++        if self.calibrator is not None:
++            # §14.2: mean via the fitted recalibration map; SE widened via the deflated
++            # effective count (never narrower than reality — Calibrator.n_eff only shrinks n).
++            mean = self.calibrator.recalibrate(m.mean)
++            n = self.calibrator.n_eff(m.n_eff)
++            se = math.sqrt(max(mean * (1.0 - mean), 1e-12) / (n + 1.0))
++            return Posterior(mean, se, n)
+         return Posterior(m.mean, math.sqrt(m.var), m.n_eff)
+ 
+     def drift_estimate(self, skill: str, difficulty: str, context: Optional[str] = None) -> Posterior:
+diff --git a/mdlp/tests/test_h4_wiring.py b/mdlp/tests/test_h4_wiring.py
+new file mode 100644
+index 0000000..fd5a5dc
+--- /dev/null
++++ b/mdlp/tests/test_h4_wiring.py
+@@ -0,0 +1,59 @@
++"""H4 wire-or-retract regression tests (HANDOVER-v4 T1).
++
++Each test guards one wiring: the construct must be reachable from the live path,
++not merely importable. The pre-H4 audit finding (AUDIT-TA-2026-08 / IX-064) was
++five constructs with tests and no live callers — these tests make that state fail.
++"""
++import math
++import random
++
++from mdlp.calibration import Calibrator
++from mdlp.state import ProbabilisticState
++
++
++def test_estimate_identity_without_calibrator():
++    st = ProbabilisticState(n_min=8.0)
++    st.update("s", "task", 3, 1)
++    p = st.estimate("s", "task")
++    assert 0.0 < p.mean < 1.0 and p.se > 0.0
++
++
++def test_estimate_calibrated_when_wired():
++    cal = Calibrator(n_floor=20)
++    st = ProbabilisticState(n_min=8.0, calibrator=cal)
++    st.update("s", "task", 6, 2)
++    raw = ProbabilisticState(n_min=8.0)
++    raw.update("s", "task", 6, 2)
++    # Below the observation floor the calibrator is identity on the mean...
++    assert math.isclose(st.estimate("s", "task").mean, raw.estimate("s", "task").mean)
++    # ...then feed an over-confident history AT the posterior's own operating point:
++    # predictions ~the raw mean, reality ~50/50 (in-distribution for the isotonic map).
++    p_op = raw.estimate("s", "task").mean
++    rng = random.Random(0)
++    for _ in range(200):
++        cal.observe(p_op, 1 if rng.random() < 0.5 else 0)
++    assert cal.ready() and cal.ece() > 0.1
++    calibrated = st.estimate("s", "task")
++    # SE must WIDEN (n_eff deflated) relative to the raw posterior — never narrow.
++    assert calibrated.n < raw.estimate("s", "task").n
++    assert calibrated.se > raw.estimate("s", "task").se
++
++
++def test_live_run_feeds_calibrator():
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    corpus = default_corpus()
++    run = LiveLearningRun(corpus, CorpusFakeRunner(), n_min=4.0, rng_seed=1)
++    assert run.calibrator is run.state.calibrator          # one calibrator, shared
++    run.run(3)
++    assert len(run.calibrator._preds) > 0                  # observations actually flowed
++
++
++def test_isotonic_tied_predictions_pool_into_one_block():
++    """The H4-2-found calibration bug: tied p̂ with mixed outcomes must map to their
++    pooled mean, never to the first tied observation's outcome."""
++    from mdlp.calibration import isotonic_fit, recalibrate
++    preds = [0.6] * 10
++    outcomes = [0, 1] * 5                       # ascending-start order — the failing shape
++    fit = isotonic_fit(preds, outcomes)
++    assert len(fit) == 1
++    assert abs(recalibrate(0.6, fit) - 0.5) < 1e-9
+-- 
+2.54.0
+

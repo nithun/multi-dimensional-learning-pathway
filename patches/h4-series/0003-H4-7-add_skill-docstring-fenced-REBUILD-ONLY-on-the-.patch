@@ -1,0 +1,82 @@
+From 5a4fd874ee754ab74f2899a86a20a1cfb9663b55 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Tue, 18 Aug 2026 21:27:58 +0530
+Subject: [PATCH 3/4] H4-7: add_skill docstring-fenced REBUILD-ONLY on the
+ Protocol and both tiers, with docstring tests (the put() precedent)
+
+---
+ mdlp/mdlp/stores/embedded/backends.py |  2 ++
+ mdlp/mdlp/stores/full/graph_neo4j.py  |  5 ++++-
+ mdlp/mdlp/stores/ports.py             |  7 ++++++-
+ mdlp/tests/test_h4_wiring.py          | 11 +++++++++++
+ 4 files changed, 23 insertions(+), 2 deletions(-)
+
+diff --git a/mdlp/mdlp/stores/embedded/backends.py b/mdlp/mdlp/stores/embedded/backends.py
+index b9cc510..831a3c4 100644
+--- a/mdlp/mdlp/stores/embedded/backends.py
++++ b/mdlp/mdlp/stores/embedded/backends.py
+@@ -635,6 +635,8 @@ class LocalGraphStore:
+         return report
+ 
+     def add_skill(self, node: SkillNode, prereqs: list[Edge]) -> None:
++        """REBUILD-ONLY (H4-7): direct write bypassing merge()'s validation — see the
++        GraphStore Protocol docstring; production writes go through merge(GraphDelta)."""
+         self._nodes[node.skill] = node
+         for e in prereqs:
+             self._edges[(e.src, e.dst, e.kind)] = e
+diff --git a/mdlp/mdlp/stores/full/graph_neo4j.py b/mdlp/mdlp/stores/full/graph_neo4j.py
+index 5468677..1f13494 100644
+--- a/mdlp/mdlp/stores/full/graph_neo4j.py
++++ b/mdlp/mdlp/stores/full/graph_neo4j.py
+@@ -154,7 +154,10 @@ class Neo4jGraphStore:
+             return session.execute_write(_unit)
+ 
+     def add_skill(self, node: SkillNode, prereqs: List[Edge]) -> None:
+-        """Upsert a skill node and its incoming prerequisite edges.
++        """REBUILD-ONLY (H4-7): direct write bypassing merge()'s validation — see the
++        GraphStore Protocol docstring; production writes go through merge(GraphDelta).
++
++        Upsert a skill node and its incoming prerequisite edges.
+ 
+         MERGEs ``(:Skill {name})`` setting ``status`` and ``suite_ref``, then for each
+         prerequisite :class:`Edge` MERGEs ``(prereq)-[:PREREQ]->(skill)`` carrying the
+diff --git a/mdlp/mdlp/stores/ports.py b/mdlp/mdlp/stores/ports.py
+index 0e62cf6..56fba77 100644
+--- a/mdlp/mdlp/stores/ports.py
++++ b/mdlp/mdlp/stores/ports.py
+@@ -119,7 +119,12 @@ class VectorStore(Protocol):
+ class GraphStore(Protocol):
+     """The pathway graph: skills, prerequisite/transition edges, and MCTS tree values."""
+ 
+-    def add_skill(self, node: SkillNode, prereqs: list[Edge]) -> None: ...
++    def add_skill(self, node: SkillNode, prereqs: list[Edge]) -> None:
++        """REBUILD-ONLY (H4-7). `merge(GraphDelta)` is the sole live projection write path
++        (§6.2); this direct writer exists for rebuild/tests and bypasses per-entry
++        validation — never call it from production flow (zero production callers today,
++        guarded by test_rebuild_calls_merge_and_not_add_skill and the docstring tests)."""
++        ...
+     def get_skill(self, skill: str) -> Optional[SkillNode]: ...
+     def prereqs(self, skill: str) -> list[Edge]: ...
+     def reach_weight(self, skill: str, p_mastered: Callable[[str], float]) -> float:
+diff --git a/mdlp/tests/test_h4_wiring.py b/mdlp/tests/test_h4_wiring.py
+index 8829798..4b0a9c3 100644
+--- a/mdlp/tests/test_h4_wiring.py
++++ b/mdlp/tests/test_h4_wiring.py
+@@ -97,3 +97,14 @@ def test_rollback_retires_last_committed_note_and_breaker_trips():
+     assert run.rollback_log, "a powered significant drop must fire rollback"
+     assert all(c.id != "note:1" for c in run.lib.retrieve(skill))
+     assert run.halted is not None and "k_consecutive_rollbacks" in run.halted["reasons"]
++
++
++def test_add_skill_docstrings_state_rebuild_only():
++    """H4-7: the surviving direct write path is docstring-fenced on the Protocol AND both
++    concrete tiers (the put() precedent from test_write_discipline_state_merge)."""
++    from mdlp.stores.ports import GraphStore
++    from mdlp.stores.embedded.backends import LocalGraphStore
++    assert "REBUILD-ONLY" in GraphStore.add_skill.__doc__
++    assert "REBUILD-ONLY" in LocalGraphStore.add_skill.__doc__
++    from mdlp.stores.full.graph_neo4j import Neo4jGraphStore
++    assert "REBUILD-ONLY" in Neo4jGraphStore.add_skill.__doc__
+-- 
+2.54.0
+
