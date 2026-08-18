@@ -177,13 +177,30 @@ overall         = min(<critical_floor>, <weighted_mean>) = <FINAL SCORE>
 6. determine verdict: ready-for-approval (≥80, no CRITICAL < 70) or needs-revision
 7. mkdir -p docs/research/reviews/ if needed
 8. write docs/research/reviews/<artifact-slug>-review.md
-9. append one record to .claude/memory/evolution-log.jsonl
-10. return a short summary: path, overall score, verdict, top 2 blocking issues (if any)
+9. return one evolution-log record for the orchestrator to append (see below) — do not
+   attempt to write .claude/memory/evolution-log.jsonl yourself
+10. return a short summary: path, overall score, verdict, top 2 blocking issues (if any),
+    and the evolution-log line from step 9
 ```
 
-## evolution-log.jsonl record
+## evolution-log.jsonl record — return it, don't write it yourself
 
-```json
+**Do not open `.claude/memory/evolution-log.jsonl` with the Write tool.** It is a shared,
+append-only file. Your Bash grant is restricted to arithmetic/derivation checks, not
+general shell use, so you have no safe append mechanism of your own — the only way to
+"append" with Write alone is to read the whole file and write it back with one line
+added, and any slip in that round-trip destroys every prior record. This happened for
+real: `EV-121` records a `change-approver` instance (same file, same Write-only-append
+pattern) that overwrote 133 records down to 1 this way. Reading the file is safe (only
+writing it is the hazard) — Read it if you want the next `EV-<n>` id, but if you're
+unsure, leave `<n>` for the orchestrator to fill in.
+
+Instead, **compose the line and hand it to the orchestrating session** (the caller that
+spawned you — it holds Bash/Edit and can append safely) by including it verbatim,
+clearly tagged, in your final message:
+
+```
+EVOLUTION-LOG LINE (append only — do not overwrite the file):
 {"id":"EV-<n>","date":"YYYY-MM-DD","actor":"review-360","action":"create","target":"docs/research/reviews/<artifact-slug>-review.md","why":"360 review of <artifact>","evidence":["<artifact path>"],"outcome":"pending"}
 ```
 
@@ -195,3 +212,7 @@ overall         = min(<critical_floor>, <weighted_mean>) = <FINAL SCORE>
 - **Do not skip the adversarial pass.** If you find nothing to object to, say so explicitly ("No additional objection found beyond the nine dimensions") — don't silently omit the section.
 - **Do not invent file:line citations.** If you cannot point to the exact line, say "line not found" rather than guessing.
 - **Do not use Bash for exploration.** Bash is granted only to verify arithmetic/derivations (e.g., numerical sanity checks on formulas). Use Read/Grep/Glob for artifact exploration.
+- **Don't Write `.claude/memory/evolution-log.jsonl` yourself.** Return the line in your
+  final message instead (see "evolution-log.jsonl record" above) — a real incident
+  (`EV-121`) truncated 133 records to 1 when a same-file, same-pattern `change-approver`
+  instance tried to "append" via Write. *Source: L-022.*

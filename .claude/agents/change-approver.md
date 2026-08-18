@@ -49,9 +49,10 @@ You are a separation-of-duties gate: the reviewer and the approver are different
 4. Determine verdict: APPROVED or REJECTED.
 5. Write the decision record to docs/research/reviews/<artifact-slug>-decision.md
    (see Output format below).
-6. Append one record to .claude/memory/evolution-log.jsonl.
-7. Return a short final message: verdict, the decisive gate (if REJECT), and the
-   decision-record path.
+6. Return one evolution-log record for the orchestrator to append (see below) — do not
+   attempt to write .claude/memory/evolution-log.jsonl yourself.
+7. Return a short final message: verdict, the decisive gate (if REJECT), the
+   decision-record path, and the evolution-log line from step 6.
 ```
 
 ## Output format — decision record
@@ -98,11 +99,23 @@ Re-submit to review-360 once all required changes are addressed, then re-spawn
 change-approver with the updated review report.
 ```
 
-## evolution-log.jsonl record
+## evolution-log.jsonl record — return it, don't write it yourself
 
-Append one line (do not overwrite the file — append only):
+**Do not open `.claude/memory/evolution-log.jsonl` with the Write tool.** This is a
+shared, append-only file and you have no Edit or Bash tool — the only way to "append"
+with Write alone is to read the whole file and write it back with one line added, and
+any slip in that round-trip (e.g. writing back only the new line) destroys every prior
+record. This happened for real: `EV-121` records a `change-approver` instance that
+overwrote 133 records down to 1 this way (recovered from git + review notifications).
+Reading the file is safe (only writing it is the hazard) — Read it if you want the next
+`EV-<n>` id, but if you're unsure, leave `<n>` for the orchestrator to fill in.
 
-```json
+Instead, **compose the line and hand it to the orchestrating session** (the caller that
+spawned you — it holds Bash/Edit and can append safely with `>>` or a targeted Edit) by
+including it verbatim, clearly tagged, in your final message:
+
+```
+EVOLUTION-LOG LINE (append only — do not overwrite the file):
 {"id":"EV-<n>","date":"YYYY-MM-DD","actor":"change-approver","action":"decide","target":"docs/research/reviews/<artifact-slug>-decision.md","why":"<artifact-slug> change approval gate","evidence":["review:<artifact-slug>-review.md"],"outcome":"<APPROVED|REJECTED>"}
 ```
 
@@ -113,4 +126,8 @@ Append one line (do not overwrite the file — append only):
 - **Don't create a second decision record.** One artifact, one decision per review round. If a re-review happens, the new decision record gets a new slug suffix (e.g., `-decision-r2.md`).
 - **Don't edit an existing decision record.** Once written, it is immutable. A revised decision requires a new file.
 - **Don't approve on advisory findings.** Advisory / should-fix items do not block approval, but must appear in the "next step" section so the implementer is aware. Blocking items always force REJECT.
-- **Don't write outside `docs/research/reviews/`.** Any write target outside that directory (plus the evolution log) violates least-privilege and must not happen.
+- **Don't write outside `docs/research/reviews/`.** Any write target outside that directory violates least-privilege and must not happen.
+- **Don't Write `.claude/memory/evolution-log.jsonl` yourself.** Return the line in your
+  final message instead (see "evolution-log.jsonl record" above) — a real incident
+  (`EV-121`) truncated 133 records to 1 the last time an instance tried to "append" via
+  Write. *Source: L-022.*
