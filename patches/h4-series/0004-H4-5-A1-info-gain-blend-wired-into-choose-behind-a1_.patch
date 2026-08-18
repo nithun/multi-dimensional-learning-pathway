@@ -1,7 +1,7 @@
 From ab2ad6e9b49d9ba4dbd60d1d9b14f175566cb0cb Mon Sep 17 00:00:00 2001
 From: Nithun <nithunram@gmail.com>
 Date: Tue, 18 Aug 2026 21:29:25 +0530
-Subject: [PATCH 4/4] H4-5: A1 info-gain blend wired into choose() behind a1_w
+Subject: [PATCH 4/5] H4-5: A1 info-gain blend wired into choose() behind a1_w
  (0.0 = byte-identical M0 path, tested); LiveLearningRun exposes a1_w as the
  live call site
 

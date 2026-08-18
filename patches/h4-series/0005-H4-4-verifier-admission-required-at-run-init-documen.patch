@@ -1,0 +1,302 @@
+From e8a735544aabb945c91fd82beb4369ef914c1777 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Tue, 18 Aug 2026 21:39:35 +0530
+Subject: [PATCH 5/5] H4-4: verifier admission required at run init (documented
+ small-corpus opt-out); counterfactual variant probes on held-out items kill
+ hard-coded answers; shape_ok retracted-with-reason for prompt-only runners
+
+---
+ mdlp/mdlp/corpus.py                 | 48 ++++++++++++++++++++++++-----
+ mdlp/mdlp/warmstart.py              |  6 ++--
+ mdlp/tests/test_corpus.py           |  4 +--
+ mdlp/tests/test_corpus_m1_wiring.py | 21 +++++++------
+ mdlp/tests/test_h4_wiring.py        | 39 +++++++++++++++++++++++
+ 5 files changed, 97 insertions(+), 21 deletions(-)
+
+diff --git a/mdlp/mdlp/corpus.py b/mdlp/mdlp/corpus.py
+index 4b95888..4dbfa6a 100644
+--- a/mdlp/mdlp/corpus.py
++++ b/mdlp/mdlp/corpus.py
+@@ -61,6 +61,11 @@ class CorpusTask:
+     expected: str
+     split: str = "held_out"
+     u: float = 0.5
++    # H4-4 (§4.2): the counterfactual probe — a fresh variant of the SAME rule with a
++    # different input, so a hard-coded/memorized answer that matches `expected` cannot
++    # also match the variant. None ⇒ no probe for this item (the eval.py Item pattern).
++    variant_prompt: Optional[str] = None
++    variant_expected: Optional[str] = None
+ 
+ 
+ def _acme_cipher(word: str) -> str:
+@@ -177,11 +182,16 @@ def default_corpus(*, n_public: int = 16, n_held: int = 40) -> CodeCorpus:
+                    expected=_acme_cipher(w), u=i / max(n_public, 1))
+         for i, w in enumerate(pub_words)
+     ]
++    # H4-4: held-out items carry counterfactual variants — a disjoint word pool through
++    # the same rule (offset 20_000, colliding with neither split's words).
++    var_words = _gen_words(n_held, offset=20_000)
+     held_out = [
+         CorpusTask(id=f"acme-held-{i}", skill="acme-cipher", split="held_out",
+                    prompt=f"Encode the word {w} using the ACME cipher. Reply with only the result.",
+-                   expected=_acme_cipher(w), u=i / max(n_held, 1))
+-        for i, w in enumerate(held_words)
++                   expected=_acme_cipher(w), u=i / max(n_held, 1),
++                   variant_prompt=f"Encode the word {v} using the ACME cipher. Reply with only the result.",
++                   variant_expected=_acme_cipher(v))
++        for i, (w, v) in enumerate(zip(held_words, var_words))
+     ]
+     return CodeCorpus(skills=["acme-cipher"], public=public, held_out=held_out)
+ 
+@@ -399,13 +409,24 @@ class LiveLearningRun:
+                  use_gate: bool = True, inject_cheat: bool = False,
+                  n_min: float = 8.0, rng_seed: int = 0, policy=None,
+                  prereqs: Optional[dict[str, str]] = None,
+-                 a1_w: float = 0.0):
++                 a1_w: float = 0.0, require_admission: bool = True):
+         from .adapters.learning import LiveRunnerVerifier
+         from .adapters.runner import exact_check
+         self.corpus = corpus
+         self.use_learning = use_learning
+         self.use_gate = use_gate
+         self.inject_cheat = inject_cheat
++        # H4-4 (§4.3, live-wired): the corpus grader passes ADMISSION before the run —
++        # reliability lower-CI ≥ ρ_min against the audit set, refused loudly otherwise
++        # (never a silent downgrade to a softer verifier).
++        self.registry = admit_corpus_verifier(corpus)
++        if require_admission and not self.registry.admit("corpus-exact", band="corpus"):
++            raise RuntimeError(
++                "corpus verifier failed admission (reliability lower-CI < rho_min) — "
++                "refusing to run: an unadmitted grader cannot produce gated evidence "
++                "(§4.3). Small hermetic harness corpora (< ~20 tasks cannot clear the "
++                "Wilson bound) may pass require_admission=False — the documented "
++                "non-production opt-out, the warmstart require_anchor_set precedent.")
+         self.verifier = LiveRunnerVerifier(runner=runner, check=exact_check)
+         # H4-2 (§14, live-wired): decision-time predictions vs realized held-out outcomes
+         # feed a per-run Calibrator; estimate() serves the calibrated posterior once the
+@@ -495,7 +516,20 @@ class LiveLearningRun:
+         for t in self.corpus.tasks(skill, split):
+             payload = {"id": t.id, "prompt": t.prompt, "expected": t.expected,
+                        "skill": skill, "split": split, "u": t.u, "context": ctx}
+-            out[t.id] = 1 if self.verifier.verify(skill, payload) else 0
++            ok = self.verifier.verify(skill, payload)
++            # H4-4 (§4.2): counterfactual probe — the item passes only if the SAME
++            # capability also solves a fresh variant input (kills memorized/hard-coded
++            # answers that happen to match `expected`). Same u ⇒ the deterministic
++            # stand-in runner behaves identically on both, so hermetic magnitudes are
++            # unchanged; a real runner genuinely re-executes. shape_ok remains honestly
++            # out of scope for prompt-only runners: no trajectory is captured, so there
++            # is nothing to check — retracted-with-reason rather than faked (H4-4).
++            if ok and t.variant_prompt is not None:
++                v_payload = {"id": f"{t.id}:v", "prompt": t.variant_prompt,
++                             "expected": t.variant_expected, "skill": skill,
++                             "split": split, "u": t.u, "context": ctx}
++                ok = self.verifier.verify(skill, v_payload)
++            out[t.id] = 1 if ok else 0
+         return out
+ 
+     def _eval(self, skill: str, split: str, extra: Optional[list[dict]] = None) -> tuple[int, int]:
+@@ -691,7 +725,7 @@ class LiveLearningRun:
+ 
+ 
+ def run_b7(runner, *, corpus: Optional[CodeCorpus] = None, n_ticks: int = 20,
+-           rng_seed: int = 0, on_tick=None) -> dict:
++           rng_seed: int = 0, on_tick=None, require_admission: bool = True) -> dict:
+     """The B7 GO/NO-GO experiment through a real runner. Returns BOTH arms so the caller can
+     enforce the discipline: GO iff held-out(learning) beats held-out(no-learning) baseline.
+     The same call runs hermetically (CorpusFakeRunner) or for real (ClaudeRunner).
+@@ -701,9 +735,9 @@ def run_b7(runner, *, corpus: Optional[CodeCorpus] = None, n_ticks: int = 20,
+     multi-hour run is indistinguishable from a hang — see run_b7_live.py's checkpointing)."""
+     corpus = corpus or default_corpus()
+     _cb = (lambda t, n, s, c, e: on_tick("learn", t, n, s, c, e)) if on_tick else None
+-    learn = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed).run(n_ticks, on_tick=_cb)
++    learn = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed, require_admission=require_admission).run(n_ticks, on_tick=_cb)
+     _cb = (lambda t, n, s, c, e: on_tick("base", t, n, s, c, e)) if on_tick else None
+-    base = LiveLearningRun(corpus, runner, use_learning=False, rng_seed=rng_seed).run(n_ticks, on_tick=_cb)
++    base = LiveLearningRun(corpus, runner, use_learning=False, rng_seed=rng_seed, require_admission=require_admission).run(n_ticks, on_tick=_cb)
+     margin = round(learn.mean_held() - base.mean_held(), 3)
+     # LIVENESS GUARD (Xoyo lesson #4): if the runner mostly ERRORED (401/429/crash → nonzero
+     # rc), this is a dead runner, not a learning result — a margin of 0 then means "nothing
+diff --git a/mdlp/mdlp/warmstart.py b/mdlp/mdlp/warmstart.py
+index 0ea5147..3813dfb 100644
+--- a/mdlp/mdlp/warmstart.py
++++ b/mdlp/mdlp/warmstart.py
+@@ -179,7 +179,7 @@ def run_warm_start_comparison(corpus, runner, *, skill: str, n_ticks_learner1: i
+     used to validate B4/S15's live behavior without passing a running tick offset instead."""
+     from .corpus import LiveLearningRun
+ 
+-    learner1 = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed).run(n_ticks_learner1)
++    learner1 = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed, require_admission=False).run(n_ticks_learner1)
+     learner1_final = learner1.held_competence(skill).mean
+ 
+     # SCOPE (anchor set, W1.4): this toy harness has no anchor set to embed against — there is
+@@ -193,14 +193,14 @@ def run_warm_start_comparison(corpus, runner, *, skill: str, n_ticks_learner1: i
+     neighbor = Neighbor(id="learner1", features=[learner1_final], competence=learner1_final)
+     warm_beta = warm_prior([neighbor], n_eff_warm=n_eff_warm, require_anchor_set=False)
+ 
+-    warm_learner = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed + 1)
++    warm_learner = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed + 1, require_admission=False)
+     warm_learner.state.seed_prior(skill, "task", warm_beta)
+     warm_trajectory = []
+     for _ in range(n_ticks_learner2):
+         warm_learner.run(1)
+         warm_trajectory.append(round(warm_learner.held_competence(skill).mean, 3))
+ 
+-    cold_learner = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed + 1)
++    cold_learner = LiveLearningRun(corpus, runner, use_learning=True, rng_seed=rng_seed + 1, require_admission=False)
+     cold_trajectory = []
+     for _ in range(n_ticks_learner2):
+         cold_learner.run(1)
+diff --git a/mdlp/tests/test_corpus.py b/mdlp/tests/test_corpus.py
+index 3473dce..2cdef5a 100644
+--- a/mdlp/tests/test_corpus.py
++++ b/mdlp/tests/test_corpus.py
+@@ -82,10 +82,10 @@ def test_run_b7_refuses_go_when_runner_errors():
+         def run(self, agent, task):
+             return RunResult(output="401 Invalid authentication credentials", returncode=1)
+ 
+-    dead = run_b7(DeadRunner(), corpus=default_corpus(n_public=3, n_held=5), n_ticks=3)
++    dead = run_b7(DeadRunner(), corpus=default_corpus(n_public=3, n_held=5), n_ticks=3, require_admission=False)
+     assert dead["error_rate"] == 1.0
+     assert dead["runner_ok"] is False
+     assert dead["go"] is False                           # a dead runner is never a GO
+ 
+-    healthy = run_b7(CorpusFakeRunner(), corpus=default_corpus(n_public=3, n_held=5), n_ticks=3)
++    healthy = run_b7(CorpusFakeRunner(), corpus=default_corpus(n_public=3, n_held=5), n_ticks=3, require_admission=False)
+     assert healthy["error_rate"] == 0.0 and healthy["runner_ok"] is True  # no false alarm
+diff --git a/mdlp/tests/test_corpus_m1_wiring.py b/mdlp/tests/test_corpus_m1_wiring.py
+index 0943f61..230a36c 100644
+--- a/mdlp/tests/test_corpus_m1_wiring.py
++++ b/mdlp/tests/test_corpus_m1_wiring.py
+@@ -17,13 +17,16 @@ def test_default_corpus_b7_is_unchanged_by_the_m1_wiring():
+     Asserts arm_calls/arm_errors too (pre-C0 finding #7): CorpusFakeRunner can never itself
+     produce a nonzero return code, so `error_rate==0.0` alone is a vacuous check — the call
+     COUNTS are what actually prove the wiring didn't add or skip any verifier calls."""
+-    r = run_b7(CorpusFakeRunner(), corpus=default_corpus(n_public=3, n_held=5), n_ticks=3)
++    r = run_b7(CorpusFakeRunner(), corpus=default_corpus(n_public=3, n_held=5), n_ticks=3, require_admission=False)
+     assert r["margin"] == 0.0
+     assert r["go"] is False
+     assert r["notes_committed"] == 0
+     assert r["pregate_mean_delta"] == 0.2
+     assert r["error_rate"] == 0.0
+-    assert r["arm_calls"] == {"learn": 72, "base": 24}
++    # H4-4 raised these deterministic counts from {learn: 72, base: 24}: each PASSING
++    # held-out item now re-verifies its counterfactual variant (§4.2), which is extra
++    # runner calls by design — the probe is real verification work, not overhead drift.
++    assert r["arm_calls"] == {"learn": 84, "base": 27}
+     assert r["arm_errors"] == {"learn": 0, "base": 0}
+ 
+ 
+@@ -35,7 +38,7 @@ def test_multi_skill_corpus_has_both_skills_disjoint_from_default():
+ 
+ def test_growth_registry_is_the_real_source_of_truth_for_practice():
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+-    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=True).run(20)
++    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=True, require_admission=False).run(20)
+     assert set(run.growth.scorable_skills()) == {"acme-cipher", "acme-batch"}
+     # order is preserved too (pre-C0 finding #8): DecisionEngine.choose() is candidate-order
+     # sensitive under a fixed seed, so a silent reorder would change picks with nothing to
+@@ -49,7 +52,7 @@ def test_growth_registry_is_the_real_source_of_truth_for_practice():
+ def test_b2_wiring_diagnoses_the_correct_weak_prereq():
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+     weak_runner = CorpusFakeRunner(base=0.02, gain=0.02)   # both skills stay weak
+-    run = LiveLearningRun(c, weak_runner, use_learning=False,
++    run = LiveLearningRun(c, weak_runner, use_learning=False, require_admission=False,
+                           prereqs={"acme-batch": "acme-cipher"}).run(30)
+     diagnosed = [e for e in run.prereq_gap_log if e["weak_prereq"]]
+     assert diagnosed                                        # at least one real diagnosis fired
+@@ -67,7 +70,7 @@ def test_b2_wiring_does_not_flood_the_log_during_one_continuous_streak():
+     one per tick of a 30-tick run."""
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+     weak_runner = CorpusFakeRunner(base=0.02, gain=0.02)
+-    run = LiveLearningRun(c, weak_runner, use_learning=False,
++    run = LiveLearningRun(c, weak_runner, use_learning=False, require_admission=False,
+                           prereqs={"acme-batch": "acme-cipher"}).run(30)
+     batch_entries = [e for e in run.prereq_gap_log if e["skill"] == "acme-batch"]
+     # far fewer than "one per failing tick" - the guard suppresses re-diagnosis mid-streak
+@@ -76,7 +79,7 @@ def test_b2_wiring_does_not_flood_the_log_during_one_continuous_streak():
+ 
+ def test_b4_wiring_populates_the_spacing_log():
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+-    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=True).run(15)
++    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=True, require_admission=False).run(15)
+     assert len(run.spacing_log) == 15
+     assert set(run.scheduler._skills.keys()) <= {"acme-cipher", "acme-batch"}
+ 
+@@ -84,7 +87,7 @@ def test_b4_wiring_populates_the_spacing_log():
+ def test_s15_wiring_fires_downstream_failure_only_on_the_diagnosed_root():
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+     weak_runner = CorpusFakeRunner(base=0.02, gain=0.02)
+-    run = LiveLearningRun(c, weak_runner, use_learning=False,
++    run = LiveLearningRun(c, weak_runner, use_learning=False, require_admission=False,
+                           prereqs={"acme-batch": "acme-cipher"}).run(30)
+     downstream_fires = [e for e in run.revisit_trigger_log
+                         if RevisitTrigger.DOWNSTREAM_FAILURE in e["triggers"]]
+@@ -121,7 +124,7 @@ def test_s15_spacing_due_can_fire_in_situ_at_shipped_defaults():
+     elapsed=3 -> retention ~ exp(-15) -> urgency ~ 1 >= rho_rev 0.5 at shipped defaults)."""
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+     script = _ScriptedPolicy(["acme-cipher", "acme-batch", "acme-batch", "acme-cipher"])
+-    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=False, policy=script).run(4)
++    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=False, require_admission=False, policy=script).run(4)
+     spacing_fires = [e for e in run.revisit_trigger_log
+                      if RevisitTrigger.SPACING_DUE in e["triggers"]]
+     assert any(e["candidate"] == "acme-cipher" for e in spacing_fires)
+@@ -134,7 +137,7 @@ def test_s15_wiring_never_fabricates_model_moved_or_vector_close():
+     """No honest signal exists for these two triggers in this embedding-free, single-session
+     toy corpus — they must never fire (a fabricated trigger would be worse than none)."""
+     c = multi_skill_corpus(n_public=3, n_held=5, n_public_batch=3, n_held_batch=5)
+-    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=True,
++    run = LiveLearningRun(c, CorpusFakeRunner(), use_learning=True, require_admission=False,
+                           prereqs={"acme-batch": "acme-cipher"}).run(20)
+     for entry in run.revisit_trigger_log:
+         assert RevisitTrigger.MODEL_MOVED not in entry["triggers"]
+diff --git a/mdlp/tests/test_h4_wiring.py b/mdlp/tests/test_h4_wiring.py
+index a8df65e..7bd5b80 100644
+--- a/mdlp/tests/test_h4_wiring.py
++++ b/mdlp/tests/test_h4_wiring.py
+@@ -150,3 +150,42 @@ def test_live_run_exposes_a1_w():
+     assert run.decision.a1_w == 0.5
+     run.run(2)
+     assert run.halted is None
++
++
++def test_verifier_admission_wired_at_run_init():
++    """H4-4: the run refuses to start without an admitted grader; a healthy corpus admits."""
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    run = LiveLearningRun(default_corpus(), CorpusFakeRunner(), rng_seed=5)
++    assert run.registry.admit("corpus-exact", band="corpus")
++
++
++def test_counterfactual_variant_kills_hardcoded_answers():
++    """H4-4 (§4.2): a cheating runner that returns the MAIN expected string regardless of
++    input passes the main item but fails the fresh-variant probe — the item scores 0."""
++    from mdlp.adapters.runner import RunResult
++    from mdlp.corpus import LiveLearningRun, default_corpus
++
++    class HardcodedRunner:
++        def __init__(self, corpus):
++            self._by_prompt = {t.prompt: t.expected for t in corpus.held_out}
++        def run(self, agent_name, task):
++            # answers the MAIN prompt's expected string no matter what is asked —
++            # a memorized/hard-coded answer, the §4.2 attack.
++            main = self._by_prompt.get(task["prompt"])
++            if main is not None:
++                return RunResult(output=main)              # correct on the main item
++            return RunResult(output=next(iter(self._by_prompt.values())))  # constant elsewhere
++    corpus = default_corpus(n_public=4, n_held=6)
++    run = LiveLearningRun(corpus, HardcodedRunner(corpus), rng_seed=6, require_admission=False)
++    items = run._eval_items("acme-cipher", "held_out")
++    assert all(v == 0 for v in items.values()), \
++        "every hard-coded pass must be killed by its variant probe"
++
++
++def test_variants_do_not_change_honest_runner_outcomes():
++    """H4-4: the deterministic stand-in runner sees the same u on main and variant, so
++    hermetic pass/fail is unchanged by the probe (no test-magnitude recalibration)."""
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    run = LiveLearningRun(default_corpus(n_public=4, n_held=8), CorpusFakeRunner(), rng_seed=7, require_admission=False)
++    items = run._eval_items("acme-cipher", "held_out")
++    assert set(items.values()) <= {0, 1} and len(items) == 8
+-- 
+2.54.0
+
