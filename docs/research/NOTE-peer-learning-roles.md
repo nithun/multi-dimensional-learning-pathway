@@ -129,6 +129,7 @@ Sketch of the check set: `test_pool_of_one_equals_current` · `test_no_self_teac
 3. **Pull or push?** (T8) — the substrate argues pull; worth testing rather than assuming, since it contradicts most multi-agent teacher designs.
 4. **Does the population beat N independent learners on the same budget?** — the claim that justifies the fleet.
 5. **Where does this sit relative to M2/M3?** Peer learning needs no weight axis and no self-modification, so it is *not* obviously gated behind them. It may be closer to M-R than §18 currently implies — worth checking, because if so, the fleet's first real payoff arrives a milestone earlier than planned.
+6. **What is a role, mechanically?** Input from the Rox study (2026-08-19, `STUDY-rox-agent-swarm.md` §5.4): Rox's governance makes agents **first-class security entities** in the same permission primitive as humans (the "Pod"), so *what an agent may do* is a revocable, provenance-traced **grant**, resolved by the same formula for every actor. Rotating teacher/student roles wants exactly this shape: "teacher for skill s" as a grant conferred by the competence-gap evidence (§3's band), revoked when the gap closes — not a hardcoded topology. Production precedent that identity-uniform grants scale; the open design question is what evidence confers the grant, which is this note's §3.
 
 ---
 

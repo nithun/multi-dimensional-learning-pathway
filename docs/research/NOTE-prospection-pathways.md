@@ -110,6 +110,8 @@ What it does not deliver, said plainly: **the projector is still a generative mo
 
 Sequencing note: VIS-1/2 depend on nothing pending; JMP-2 is the natural evidence-manufacturing stage of the pipeline but each stands alone. If pursued, all flow the L-010 gate.
 
+**Input from the Rox study (2026-08-19, `STUDY-rox-agent-swarm.md` §5.3):** Rox runs "offline evaluation agents" comparing what its agents recommended against *what actually happened*, with a stated goal of tuning from **delayed, noisy business-outcome signals** — the one place a production system's ambition exceeds MDLP's current scope. MDLP's held-out verification is immediate (same-run eval items); a projected pathway's claims are verified *late* by construction. If VIS-1/VIS-2 are pursued, the verification story must say how delayed outcomes settle a projection's score without contaminating C (the same P1 wall, shifted in time) — Rox's retrospective-audit shape (compare-when-outcomes-arrive, never inline) is the production precedent for keeping that channel out of the optimization loop.
+
 ---
 
 *Ungated design sketch. The owner's intuition, formalized: forward projection = `previsit` (episodic future simulation — §15's documented twin in the cognitive literature); "pathways in reverse" = backward design (Wiggins & McTighe), which MDLP lacked; the "5th dimension" = a branch index on the competence field, kept honest as disposable planning sheets behind a type-level write barrier. The safety line — projection proposes, reality disposes — is what makes the whole idea admissible under P1/RC-2/RC-3 without new gate machinery. L-012 unchanged.*
