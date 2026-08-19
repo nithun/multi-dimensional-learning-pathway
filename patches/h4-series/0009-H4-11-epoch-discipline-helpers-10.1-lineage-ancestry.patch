@@ -1,0 +1,166 @@
+From 8730f54a4e2b59196ec3bfccc895bca08f7b66c7 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Wed, 19 Aug 2026 07:34:23 +0530
+Subject: [PATCH 9/9] =?UTF-8?q?H4-11:=20epoch=20discipline=20helpers=20(?=
+ =?UTF-8?q?=C2=A710.1)=20=E2=80=94=20lineage-ancestry=20generation=20compa?=
+ =?UTF-8?q?rison,=20reverted-span=20off-path=20rule;=20H4-6:=20=C2=A716=20?=
+ =?UTF-8?q?formally=20parked=20post-M-R=20with=20stated=20un-park=20steps?=
+ =?UTF-8?q?=20and=20a=20guard=20test=20(the=20honest=20retract=20branch=20?=
+ =?UTF-8?q?=E2=80=94=20the=20live=20loop=20is=20storeless)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ mdlp/mdlp/retrieval.py       | 10 +++++++
+ mdlp/mdlp/stores/epoch.py    | 54 ++++++++++++++++++++++++++++++++++++
+ mdlp/tests/test_epoch.py     | 39 ++++++++++++++++++++++++++
+ mdlp/tests/test_h4_wiring.py |  7 +++++
+ 4 files changed, 110 insertions(+)
+ create mode 100644 mdlp/mdlp/stores/epoch.py
+ create mode 100644 mdlp/tests/test_epoch.py
+
+diff --git a/mdlp/mdlp/retrieval.py b/mdlp/mdlp/retrieval.py
+index 9bb2138..7838a1a 100644
+--- a/mdlp/mdlp/retrieval.py
++++ b/mdlp/mdlp/retrieval.py
+@@ -1,6 +1,16 @@
+ """retrieval.py (§16, M1) — unified retrieval: the 5-DB RAG becomes the INNER LOOP of EXPAND,
+ gated by its own info-gain objective rather than a fixed top-k fetch.
+ 
++H4-6 STATUS — FORMALLY PARKED post-M-R (the retract branch of wire-or-retract, recorded
++here rather than left ambiguous): this module is complete and tested but has NOTHING to
++dispatch over in the current live loop — `LiveLearningRun` is in-process and storeless
++(its retrieval is `SkillLibrary.retrieve`, a different mechanism), and §16's 5-mode
++dispatch requires the 5-store substrate to be wired under the live loop first (a G2/G5
++integration that is itself post-M-R work). Wiring §16 into a storeless loop would be
++fake integration; parking is the honest state. NOT retracted from the spec — retracted
++from the M-R scope. Un-park by: (1) backing LiveLearningRun with a Stores bundle,
++(2) routing `_ctx_payloads` through RetrievalPolicy, (3) deleting this notice.
++
+ Two beliefs, deliberately kept separate:
+   * C — durable competence (`state.py`'s ProbabilisticState). Untouched by this module.
+   * Q — EPISODE-scoped "is my current answer correct given context-so-far" Beta. Reset at the
+diff --git a/mdlp/mdlp/stores/epoch.py b/mdlp/mdlp/stores/epoch.py
+new file mode 100644
+index 0000000..868447c
+--- /dev/null
++++ b/mdlp/mdlp/stores/epoch.py
+@@ -0,0 +1,54 @@
++"""epoch.py (H4-11, ALGORITHM §10.1) — epoch discipline: validation does not cross
++checkpoint generations.
++
++The rule, TA-scoped (the §17.6 scaffold machinery is M3-horizon; what exists today is
++the lineage chain every record already references): generation comparison is lineage
++ANCESTRY on recorded checkpoint_ids — never wall-clock, never version-string order —
++and a judgment from a generation OFF the current head's ancestor chain (a reverted
++span) is not merely stale, it is off-path: mandatory invalidate-or-absent, never
++served (§10.1's reverted-span rule; the §17.6 CAPTURE ancestry-not-existence
++precedent applied to judgments).
++
++Three legal moves for a cross-generation judgment: INVALIDATE (recompute from
++in-generation evidence), DISCOUNT (treat as absent, never as confirmation), or —
++reserved for the §17.3 fallback case alone, not implemented pre-M3 — serve-marked.
++Trusting is the fourth move, and it is illegal.
++"""
++from __future__ import annotations
++
++TRUSTED = "trusted"                # same generation — usable as-is
++INVALIDATE = "invalidate"          # ancestor generation — recompute or discount
++OFF_PATH = "off_path"              # reverted span — mandatory invalidate-or-absent
++UNKNOWN_GENERATION = "unknown"     # not in lineage at all — treat as OFF_PATH
++
++
++def _parents(truth) -> dict:
++    return dict(truth._db.execute(
++        "SELECT checkpoint_id, parent FROM lineage").fetchall())
++
++
++def is_ancestor(truth, old: str, head: str, *, max_depth: int = 10_000) -> bool:
++    """True iff `old` is `head` or an ancestor of `head` along the lineage parent chain.
++    Ancestry, not existence — a checkpoint whose commit was later reverted exists in
++    lineage but is NOT on the current chain, and must not pass (§17.6's load-bearing
++    choice, §10.1's rule)."""
++    parents = _parents(truth)
++    node, depth = head, 0
++    while node is not None and depth <= max_depth:
++        if node == old:
++            return True
++        node = parents.get(node)
++        depth += 1
++    return False
++
++
++def judgment_status(truth, judgment_gen: str, head_gen: str) -> str:
++    """Classify a validation-grade judgment's generation against the live head."""
++    if judgment_gen == head_gen:
++        return TRUSTED
++    parents = _parents(truth)
++    if judgment_gen not in parents and judgment_gen not in set(parents.values()):
++        return UNKNOWN_GENERATION
++    if is_ancestor(truth, judgment_gen, head_gen):
++        return INVALIDATE
++    return OFF_PATH
+diff --git a/mdlp/tests/test_epoch.py b/mdlp/tests/test_epoch.py
+new file mode 100644
+index 0000000..9f30257
+--- /dev/null
++++ b/mdlp/tests/test_epoch.py
+@@ -0,0 +1,39 @@
++"""H4-11 (§10.1): epoch discipline helpers — ancestry not existence, wall-clock never."""
++from mdlp.stores import embedded
++from mdlp.stores.epoch import (INVALIDATE, OFF_PATH, TRUSTED, UNKNOWN_GENERATION,
++                               is_ancestor, judgment_status)
++
++
++def _chain():
++    s = embedded()
++    db = s.truth._db
++    # main chain c1 <- c2 <- c3 (head), plus a REVERTED branch c2 <- r1
++    db.executescript("""
++        INSERT INTO lineage(checkpoint_id, parent) VALUES
++        ('c1', NULL), ('c2', 'c1'), ('c3', 'c2'), ('r1', 'c2');
++    """)
++    db.commit()
++    return s
++
++
++def test_ancestor_on_chain_invalidates_never_trusts():
++    s = _chain()
++    assert is_ancestor(s.truth, "c1", "c3")
++    assert judgment_status(s.truth, "c1", "c3") == INVALIDATE
++    assert judgment_status(s.truth, "c3", "c3") == TRUSTED
++    s.close()
++
++
++def test_reverted_span_is_off_path():
++    """r1 EXISTS in lineage but is not an ancestor of head c3 — existence is not
++    ancestry (the §17.6 CAPTURE choice): mandatory invalidate-or-absent."""
++    s = _chain()
++    assert not is_ancestor(s.truth, "r1", "c3")
++    assert judgment_status(s.truth, "r1", "c3") == OFF_PATH
++    s.close()
++
++
++def test_unknown_generation_treated_as_off_path_class():
++    s = _chain()
++    assert judgment_status(s.truth, "ghost", "c3") == UNKNOWN_GENERATION
++    s.close()
+diff --git a/mdlp/tests/test_h4_wiring.py b/mdlp/tests/test_h4_wiring.py
+index 7bd5b80..3a121aa 100644
+--- a/mdlp/tests/test_h4_wiring.py
++++ b/mdlp/tests/test_h4_wiring.py
+@@ -189,3 +189,10 @@ def test_variants_do_not_change_honest_runner_outcomes():
+     run = LiveLearningRun(default_corpus(n_public=4, n_held=8), CorpusFakeRunner(), rng_seed=7, require_admission=False)
+     items = run._eval_items("acme-cipher", "held_out")
+     assert set(items.values()) <= {0, 1} and len(items) == 8
++
++
++def test_s16_park_is_formal_not_ambient():
++    """H4-6: §16's post-M-R park is a stated decision with stated un-park steps —
++    checkable, so it cannot silently drift back into looks-wired-but-isn't."""
++    import mdlp.retrieval as r
++    assert "FORMALLY PARKED" in r.__doc__ and "Un-park by" in r.__doc__
+-- 
+2.54.0
+

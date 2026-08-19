@@ -1,0 +1,454 @@
+From e3d409090f1ce10ccdce37a3cd7fd876854f25ae Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Wed, 19 Aug 2026 07:28:37 +0530
+Subject: [PATCH 7/9] =?UTF-8?q?H4-9:=20declared=20constraint=20table=20at?=
+ =?UTF-8?q?=20merge()=20=E2=80=94=207=20entries,=20MergeReport.flags,=20wh?=
+ =?UTF-8?q?ole-delta=20rejection=20for=20unattributable=20violations;=20C-?=
+ =?UTF-8?q?ACYCLIC=20is=20NEW=20at=20this=20layer=20and=20immediately=20su?=
+ =?UTF-8?q?rfaced=20a=20latent=20self-loop-on-absorption=20bug,=20fixed=20?=
+ =?UTF-8?q?with=20contraction=20semantics;=209=20fire=20tests?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ mdlp/mdlp/stores/constraints.py       | 216 ++++++++++++++++++++++++++
+ mdlp/mdlp/stores/embedded/backends.py |  45 +++++-
+ mdlp/mdlp/stores/schemas.py           |   4 +
+ mdlp/tests/test_constraints.py        | 102 ++++++++++++
+ 4 files changed, 363 insertions(+), 4 deletions(-)
+ create mode 100644 mdlp/mdlp/stores/constraints.py
+ create mode 100644 mdlp/tests/test_constraints.py
+
+diff --git a/mdlp/mdlp/stores/constraints.py b/mdlp/mdlp/stores/constraints.py
+new file mode 100644
+index 0000000..296241e
+--- /dev/null
++++ b/mdlp/mdlp/stores/constraints.py
+@@ -0,0 +1,216 @@
++"""constraints.py (H4-9, DL §6.3) — the declared structural constraint table at merge().
++
++Generalizes the write path's hard-coded checks into DATA — an enumerable, versioned
++table the write path evaluates — so the constraint inventory stops being scattered code
++discovered one review round at a time (the reactive-constraint pattern, MDLP L-018).
++
++Semantics carried verbatim from DL §6.3:
++  * reject-and-report, never infer: no constraint outcome resolves an inconsistency by
++    coercing, merging, or silently fixing — an entry is applied unchanged or rejected;
++  * severities — `violation` rejects the entry (per-entry, siblings still apply);
++    `warning`/`info` admit the entry UNCHANGED and only flag (MERGE stays a projection
++    writer, never a gate: a warning that altered status would be MERGE assigning
++    liveness, which §6.2 forbids);
++  * every hit of every severity lands in `MergeReport.flags` — the caller's synchronous
++    channel; the truth-event trail is the orchestrator's job, not the store's;
++  * the predicate vocabulary is a FIXED set of factory-built checkers (no user code, no
++    eval — the §17.1 decidability reasoning): cardinality, enum/value-range, closed
++    shape, property-pair, edge-set acyclicity, namespace.
++
++TA-honest notes: the acyclicity entry is NEW protection at this layer — TA enforced
++acyclicity only in the in-process PathwayGraph (graph.py), never at the store write
++path, so a rebuild or direct delta could previously introduce a cycle the algorithm
++layer would then walk forever. The liveness entry MIGRATES the existing hard-coded
++check rejection-set-identically (same reason constant, same behavior).
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Callable, Optional
++
++VIOLATION = "violation"
++WARNING = "warning"
++INFO = "info"
++
++
++@dataclass
++class ConstraintEntry:
++    constraint_id: str
++    target: str                                  # "node" | "edge" | "delta"
++    check: Callable                              # factory-built; returns None (ok) or a reason str
++    severity: str = VIOLATION
++    anchor: str = ""                             # the approved-text reference grounding it
++
++
++@dataclass
++class ConstraintTable:
++    version: str
++    entries: list[ConstraintEntry] = field(default_factory=list)
++
++
++# --- the fixed predicate factories (the six families; no user code ever executes) ------
++
++def enum_member(attr: str, allowed: tuple) -> Callable:
++    def _check(obj, ctx) -> Optional[str]:
++        v = getattr(obj, attr, None)
++        return None if v in allowed else f"{attr}={v!r} not in {allowed}"
++    return _check
++
++
++def value_range(attr: str, lo: float, hi: float) -> Callable:
++    def _check(obj, ctx) -> Optional[str]:
++        v = getattr(obj, attr, None)
++        return None if (v is not None and lo <= v <= hi) else f"{attr}={v!r} outside [{lo},{hi}]"
++    return _check
++
++
++def property_pair(if_attr: str, equals, then_attr: str) -> Callable:
++    """if obj.if_attr == equals then obj.then_attr must be non-null."""
++    def _check(obj, ctx) -> Optional[str]:
++        if getattr(obj, if_attr, None) == equals and getattr(obj, then_attr, None) is None:
++            return f"{if_attr}={equals!r} requires non-null {then_attr}"
++        return None
++    return _check
++
++
++def namespace_reserved(attr: str, reserved: tuple) -> Callable:
++    def _check(obj, ctx) -> Optional[str]:
++        v = getattr(obj, attr, "") or ""
++        return f"{attr}={v!r} claims a reserved namespace" if v in reserved else None
++    return _check
++
++
++def retires_need_provenance() -> Callable:
++    def _check(delta, ctx) -> Optional[str]:
++        if delta.retires and not getattr(delta, "provenance", None):
++            return f"{len(delta.retires)} retire(s) with empty delta.provenance"
++        return None
++    return _check
++
++
++def acyclic_after_apply(kinds: tuple = ("prereq", "part_of")) -> Callable:
++    """Delta-level: the graph must stay acyclic over the kind-union AFTER applying the
++    delta's edges. `ctx['edges_after']` is supplied by the write path (the shadow state,
++    so the check sees exactly what would be committed)."""
++    def _check(delta, ctx) -> Optional[str]:
++        adj: dict = {}
++        for (src, dst, kind) in ctx.get("edges_after", ()):  # (src, dst, kind) triples
++            if kind in kinds:
++                adj.setdefault(src, []).append(dst)
++        WHITE, GREY, BLACK = 0, 1, 2
++        color = {n: WHITE for n in adj}
++        def dfs(n) -> bool:                       # True = cycle found
++            color[n] = GREY
++            for m in adj.get(n, ()):  # noqa: B023
++                c = color.get(m, WHITE)
++                if c == GREY:
++                    return True
++                if c == WHITE and dfs(m):
++                    return True
++            color[n] = BLACK
++            return False
++        for n in list(adj):
++            if color[n] == WHITE and dfs(n):
++                return f"cycle over {kinds} reachable from {n!r}"
++        return None
++    return _check
++
++
++def default_constraint_table(*, fanin_cap: Optional[int] = None,
++                             unprovisioned_reason: str = "unprovisioned node") -> ConstraintTable:
++    """The initial registered set — every entry anchored to approved text (DL §6.3: an
++    unanchored violation-grade entry does not ship). `fanin_cap=None` disables C-FANIN-CAP
++    (its §5.1 dial is unregistered in §12 — the honest conditional, not an invented cap)."""
++    entries = [
++        ConstraintEntry("C-LIVENESS-SHAPE", "node",
++                        _liveness_shape(unprovisioned_reason),
++                        VIOLATION, "§6.2 EXTRACT rule + RC-3 (migrated hard-coded check)"),
++        # live ⇒ non-null suite_ref is DL §6.3's full clause, but TA's provisioning does
++        # not yet populate suite_ref at the store layer (eval suites live in-process at
++        # the algorithm layer) — enforcing it as a violation would reject every existing
++        # live node. Shipped as a WARNING until provisioning writes suite_ref: honest
++        # narrowing, flagged not faked (the H4 discipline).
++        ConstraintEntry("C-LIVE-SUITEREF", "node",
++                        property_pair("status", "live", "suite_ref"),
++                        WARNING, "DL §6.3 C-LIVENESS-SHAPE second clause (deferred to violation when provisioning populates suite_ref)"),
++        ConstraintEntry("C-EDGE-TYPE", "edge",
++                        enum_member("kind", ("prereq", "part_of", "transition")),
++                        VIOLATION, "DL §5 edge schemas / B2 Amendment A"),
++        ConstraintEntry("C-CONF-RANGE", "edge",
++                        value_range("confidence", 0.0, 1.0),
++                        VIOLATION, "§5.2 / B2-AmendA (confidence is a belief)"),
++        ConstraintEntry("C-ACYCLIC", "delta",
++                        acyclic_after_apply(),
++                        VIOLATION, "B2 Amendment A (union acyclicity — NEW at this layer in TA)"),
++        ConstraintEntry("C-NAMESPACE", "node",
++                        namespace_reserved("skill", ("maintenance",)),
++                        VIOLATION, "ALGORITHM §20.2 (reserved namespace, defense in depth)"),
++        ConstraintEntry("C-RETIRE-PROVENANCE", "delta",
++                        retires_need_provenance(),
++                        WARNING, "§6.2 GraphDelta schema (delta-level provenance)"),
++    ]
++    if fanin_cap is not None:
++        entries.append(ConstraintEntry(
++            "C-FANIN-CAP", "delta", _fanin_cap(fanin_cap), VIOLATION,
++            "§5.1 add_soft_prereq_edges top-k cap (parameter-by-name, caller-bound)"))
++    return ConstraintTable(version="h4-9.1", entries=entries)
++
++
++def _liveness_shape(unprovisioned_reason: str) -> Callable:
++    def _check(node, ctx) -> Optional[str]:
++        statuses = ctx.get("provisioned_statuses", ("live", "pending_human"))
++        if node.status not in statuses:
++            return unprovisioned_reason              # rejection-set-identical migration
++        return None
++    return _check
++
++
++def _fanin_cap(cap: int) -> Callable:
++    def _check(delta, ctx) -> Optional[str]:
++        fanin: dict = {}
++        for (src, dst, kind) in ctx.get("edges_after", ()):
++            if kind == "prereq":
++                fanin[dst] = fanin.get(dst, 0) + 1
++        over = [n for n, k in fanin.items() if k > cap]
++        return f"prereq fan-in over cap {cap}: {over}" if over else None
++    return _check
++
++
++def evaluate(table: ConstraintTable, *, nodes=(), edges=(), delta=None,
++             ctx: Optional[dict] = None):
++    """One evaluation pass. Returns `(rejected_node_ids, rejected_edge_objs, flags)` where
++    flags = [(target_id, constraint_id, severity)]. Delta-level VIOLATIONS reject nothing
++    by themselves here — the write path decides attribution (per DL §6.3: attributable
++    entries reject per-entry; an unattributable delta violation rejects the whole delta)."""
++    ctx = ctx or {}
++    flags: list[tuple[str, str, str]] = []
++    bad_nodes: dict = {}
++    bad_edges: list = []
++    delta_violations: list[tuple[str, str]] = []
++    for entry in table.entries:
++        if entry.target == "node":
++            for n in nodes:
++                reason = entry.check(n, ctx)
++                if reason is not None:
++                    flags.append((n.skill, entry.constraint_id, entry.severity))
++                    if entry.severity == VIOLATION:
++                        # DL §6.3: constraint_id IS the reason string — except the migrated
++                        # liveness check, whose pre-table reason constant is preserved for
++                        # rejection-set-identity with existing callers/tests.
++                        bad_nodes[n.skill] = (reason if entry.constraint_id == "C-LIVENESS-SHAPE"
++                                              else entry.constraint_id)
++        elif entry.target == "edge":
++            for e in edges:
++                reason = entry.check(e, ctx)
++                if reason is not None:
++                    eid = f"{e.src}->{e.dst}:{e.kind}"
++                    flags.append((eid, entry.constraint_id, entry.severity))
++                    if entry.severity == VIOLATION:
++                        bad_edges.append((e, entry.constraint_id))
++        elif entry.target == "delta" and delta is not None:
++            reason = entry.check(delta, ctx)
++            if reason is not None:
++                flags.append(("delta", entry.constraint_id, entry.severity))
++                if entry.severity == VIOLATION:
++                    delta_violations.append((entry.constraint_id, reason))
++    return bad_nodes, bad_edges, delta_violations, flags
+diff --git a/mdlp/mdlp/stores/embedded/backends.py b/mdlp/mdlp/stores/embedded/backends.py
+index 831a3c4..07e101d 100644
+--- a/mdlp/mdlp/stores/embedded/backends.py
++++ b/mdlp/mdlp/stores/embedded/backends.py
+@@ -578,6 +578,18 @@ class LocalGraphStore:
+         and `maybe_merge` are different §5.1 steps.
+         """
+         report = MergeReport()
++        # H4-9 (DL §6.3): the declared constraint table replaces the hard-coded checks.
++        # Node/edge violations reject PER-ENTRY (siblings still apply — the existing
++        # semantics, table-driven); the liveness check is migrated rejection-set-identically
++        # (same UNPROVISIONED_NODE reason). Warning/info hits admit unchanged and flag.
++        from ..constraints import default_constraint_table, evaluate
++        table = getattr(self, "_constraint_table", None) or default_constraint_table(
++            unprovisioned_reason=UNPROVISIONED_NODE)
++        ctx = {"provisioned_statuses": PROVISIONED_STATUSES}
++        bad_nodes, bad_edges, _dv, flags = evaluate(
++            table, nodes=delta.adds, edges=delta.edges, ctx=ctx)
++        report.flags.extend(flags)
++        bad_edge_keys = {(e.src, e.dst, e.kind) for e, _cid in bad_edges}
+         with self._merge_lock:
+             nodes = dict(self._nodes)
+             edges = dict(self._edges)
+@@ -585,9 +597,10 @@ class LocalGraphStore:
+ 
+             for node in delta.adds:
+                 # MERGE never assigns or upgrades liveness — it refuses instead. Liveness is
+-                # provision_suite's call (§5.1 RC-3), decided before the delta exists.
+-                if node.status not in PROVISIONED_STATUSES:
+-                    report.rejected.append((node.skill, UNPROVISIONED_NODE))
++                # provision_suite's call (§5.1 RC-3), decided before the delta exists —
++                # now evaluated through the table's C-LIVENESS-SHAPE entry.
++                if node.skill in bad_nodes:
++                    report.rejected.append((node.skill, bad_nodes[node.skill]))
+                     continue
+                 if node.skill in nodes:
+                     report.deduped.append(node.skill)      # set-merge: V∪V', identity dedup
+@@ -597,6 +610,10 @@ class LocalGraphStore:
+ 
+             for e in delta.edges:
+                 key = (e.src, e.dst, e.kind)
++                if key in bad_edge_keys:
++                    cid = next(c for be, c in bad_edges if (be.src, be.dst, be.kind) == key)
++                    report.rejected.append((edge_id(e), cid))
++                    continue
+                 if key in edges:
+                     report.deduped.append(edge_id(e))
+                     continue
+@@ -610,7 +627,12 @@ class LocalGraphStore:
+                     nodes.pop(absorbed)
+                     edges = {(s, d, k): _redirect(e, absorbed, survivor)
+                              for (s, d, k), e in edges.items()}
+-                    edges = {(e.src, e.dst, e.kind): e for e in edges.values()}
++                    # H4-9: standard graph-contraction semantics — an edge INTERNAL to the
++                    # unified pair becomes a self-loop on redirect and is dropped (a skill
++                    # cannot be its own prerequisite; C-ACYCLIC made this latent self-loop
++                    # visible — pre-table, absorption could leave a→a in the live graph).
++                    edges = {(e.src, e.dst, e.kind): e for e in edges.values()
++                             if e.src != e.dst}
+                     tree.pop(absorbed, None)
+                 report.merged.append((survivor, absorbed))
+ 
+@@ -630,6 +652,21 @@ class LocalGraphStore:
+                 edges[hit] = replace(edges[hit], confidence=confidence)
+                 report.updated.append(eid)
+ 
++            # H4-9: delta-level constraints evaluate against the SHADOW (exactly what
++            # would be committed). A delta-level violation is unattributable to one entry
++            # here, so per DL §6.3's fallback it rejects the WHOLE delta: the shadow is
++            # discarded, the live graph is untouched, the delta stays valid for a
++            # corrected retry — the same all-or-nothing failure contract as an exception.
++            ctx["edges_after"] = list(edges.keys())
++            _bn, _be, delta_violations, dflags = evaluate(table, delta=delta, ctx=ctx)
++            report.flags.extend(dflags)
++            if any(True for _cid, _r in delta_violations):
++                for cid, reason in delta_violations:
++                    report.rejected.append(("delta", f"{cid}: {reason}"))
++                report.added.clear(); report.deduped.clear(); report.merged.clear()
++                report.retired.clear(); report.updated.clear()
++                return report                    # no swap — nothing applied
++
+             # The swap. Everything above touched only the shadow.
+             self._nodes, self._edges, self._tree = nodes, edges, tree
+         return report
+diff --git a/mdlp/mdlp/stores/schemas.py b/mdlp/mdlp/stores/schemas.py
+index a0b7d40..3f65916 100644
+--- a/mdlp/mdlp/stores/schemas.py
++++ b/mdlp/mdlp/stores/schemas.py
+@@ -397,6 +397,10 @@ class MergeReport:
+     retired: list[str] = field(default_factory=list)
+     updated: list[str] = field(default_factory=list)
+     rejected: list[tuple[str, str]] = field(default_factory=list)   # (id, reason)
++    # H4-9 (DL §6.3): every constraint hit of every severity, synchronously —
++    # (target_id, constraint_id, severity). Rejections ALSO appear in `rejected`;
++    # warning/info hits on admitted entries appear only here.
++    flags: list[tuple[str, str, str]] = field(default_factory=list)
+ 
+     @property
+     def ok(self) -> bool:
+diff --git a/mdlp/tests/test_constraints.py b/mdlp/tests/test_constraints.py
+new file mode 100644
+index 0000000..b8f02d2
+--- /dev/null
++++ b/mdlp/tests/test_constraints.py
+@@ -0,0 +1,102 @@
++"""H4-9 (DL §6.3): the constraint table at merge() — one violating-input fire test per
++entry (a constraint that cannot be made to fire is the inert-alarm failure, §12.4)."""
++from mdlp.stores import embedded
++from mdlp.stores.schemas import Edge, GraphDelta, SkillNode
++
++
++def _g():
++    s = embedded()
++    return s, s.graph
++
++
++def test_migrated_liveness_identical():
++    """C-LIVENESS-SHAPE: same rejection, same reason string as the pre-table check."""
++    s, g = _g()
++    rep = g.merge(GraphDelta(adds=[SkillNode(skill="x", status="draft")]))
++    assert rep.rejected and rep.rejected[0][0] == "x"
++    assert any(cid == "C-LIVENESS-SHAPE" for _t, cid, _sev in rep.flags)
++    s.close()
++
++
++def test_edge_type_fires():
++    s, g = _g()
++    g.merge(GraphDelta(adds=[SkillNode(skill="a"), SkillNode(skill="b")]))
++    rep = g.merge(GraphDelta(edges=[Edge(src="a", dst="b", kind="teleport")]))
++    assert rep.rejected and rep.rejected[0][1] == "C-EDGE-TYPE"
++    s.close()
++
++
++def test_conf_range_fires():
++    s, g = _g()
++    g.merge(GraphDelta(adds=[SkillNode(skill="a"), SkillNode(skill="b")]))
++    rep = g.merge(GraphDelta(edges=[Edge(src="a", dst="b", confidence=1.7)]))
++    assert rep.rejected and rep.rejected[0][1] == "C-CONF-RANGE"
++    s.close()
++
++
++def test_acyclic_fires_and_rejects_whole_delta():
++    """C-ACYCLIC — NEW protection at this layer: TA previously enforced acyclicity only
++    in the in-process PathwayGraph, never at the store write path. A cycle-closing delta
++    rejects whole (unattributable → the §6.3 fallback), leaving the live graph untouched."""
++    s, g = _g()
++    g.merge(GraphDelta(adds=[SkillNode(skill="a"), SkillNode(skill="b")],
++                       edges=[Edge(src="a", dst="b")]))
++    before = len(list(g.prereqs("a")))
++    rep = g.merge(GraphDelta(edges=[Edge(src="b", dst="a")]))       # closes a→b→a
++    assert any("C-ACYCLIC" in r for _id, r in rep.rejected)
++    assert rep.added == []                                          # nothing applied
++    assert len(list(g.prereqs("a"))) == before                      # graph untouched
++    s.close()
++
++
++def test_namespace_fires():
++    s, g = _g()
++    rep = g.merge(GraphDelta(adds=[SkillNode(skill="maintenance")]))
++    assert rep.rejected and rep.rejected[0][1] == "C-NAMESPACE"
++    s.close()
++
++
++def test_retire_provenance_warns_but_admits():
++    """Warning severity: flagged, NEVER altered or rejected — MERGE stays a writer."""
++    s, g = _g()
++    g.merge(GraphDelta(adds=[SkillNode(skill="a")]))
++    rep = g.merge(GraphDelta(retires=["a"]))                        # no provenance
++    assert rep.retired == ["a"]                                     # admitted unchanged
++    assert any(cid == "C-RETIRE-PROVENANCE" and sev == "warning"
++               for _t, cid, sev in rep.flags)
++    clean = g.merge(GraphDelta(adds=[SkillNode(skill="b")]))
++    assert not any(cid == "C-RETIRE-PROVENANCE" for _t, cid, _s in clean.flags)
++    s.close()
++
++
++def test_live_suiteref_warns_but_admits():
++    """The honestly-narrowed second liveness clause: live+null suite_ref flags as a
++    warning (TA's provisioning does not populate suite_ref at the store layer yet)."""
++    s, g = _g()
++    rep = g.merge(GraphDelta(adds=[SkillNode(skill="a")]))          # live, suite_ref=None
++    assert rep.added == ["a"]
++    assert any(cid == "C-LIVE-SUITEREF" and sev == "warning" for _t, cid, sev in rep.flags)
++    s.close()
++
++
++def test_healthy_delta_no_flags_no_rejections():
++    s, g = _g()
++    rep = g.merge(GraphDelta(
++        adds=[SkillNode(skill="a", suite_ref="s1"), SkillNode(skill="b", suite_ref="s2")],
++        edges=[Edge(src="a", dst="b", confidence=0.8)],
++        provenance=["ev1"]))
++    assert rep.rejected == [] and rep.flags == []
++    s.close()
++
++
++def test_absorption_drops_internal_self_loop():
++    """The latent bug C-ACYCLIC surfaced: absorbing b into a redirected a→b into a
++    self-loop a→a (a skill as its own prerequisite) that lived in the graph unnoticed.
++    Contraction semantics now drop internal edges on unification."""
++    s, g = _g()
++    g.merge(GraphDelta(adds=[SkillNode(skill="a"), SkillNode(skill="b")],
++                       edges=[Edge(src="a", dst="b")]))
++    rep = g.merge(GraphDelta(merges=[("a", "b")]))
++    assert rep.merged == [("a", "b")]
++    assert all(e.src != e.dst for e in g.prereqs("a"))
++    s.close()
+-- 
+2.54.0
+

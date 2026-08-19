@@ -1,7 +1,7 @@
 From e8a735544aabb945c91fd82beb4369ef914c1777 Mon Sep 17 00:00:00 2001
 From: Nithun <nithunram@gmail.com>
 Date: Tue, 18 Aug 2026 21:39:35 +0530
-Subject: [PATCH 5/6] H4-4: verifier admission required at run init (documented
+Subject: [PATCH 5/9] H4-4: verifier admission required at run init (documented
  small-corpus opt-out); counterfactual variant probes on held-out items kill
  hard-coded answers; shape_ok retracted-with-reason for prompt-only runners
 

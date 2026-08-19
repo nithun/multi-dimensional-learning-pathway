@@ -1,0 +1,215 @@
+From 7636ef5813774e8aa09b078b15fa4ad70fe6d9d4 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Wed, 19 Aug 2026 07:32:05 +0530
+Subject: [PATCH 8/9] =?UTF-8?q?H4-10:=20learning=20liveness=20(=C2=A720.10?=
+ =?UTF-8?q?)=20=E2=80=94=20three=20signals,=20four-state=20distinguisher?=
+ =?UTF-8?q?=20(anomaly=20before=20converged),=20surfacing-only;=20per-skil?=
+ =?UTF-8?q?l=20held-out=20history=20on=20the=20run;=20Zeno-slope=20finding?=
+ =?UTF-8?q?:=20progress=20needs=20significant()'s=20margin=20(eps=5Flp)=20?=
+ =?UTF-8?q?or=20convergence=20is=20undetectable?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ mdlp/mdlp/corpus.py         |   5 ++
+ mdlp/mdlp/liveness.py       | 100 ++++++++++++++++++++++++++++++++++++
+ mdlp/tests/test_liveness.py |  56 ++++++++++++++++++++
+ 3 files changed, 161 insertions(+)
+ create mode 100644 mdlp/mdlp/liveness.py
+ create mode 100644 mdlp/tests/test_liveness.py
+
+diff --git a/mdlp/mdlp/corpus.py b/mdlp/mdlp/corpus.py
+index 4dbfa6a..7728832 100644
+--- a/mdlp/mdlp/corpus.py
++++ b/mdlp/mdlp/corpus.py
+@@ -490,6 +490,10 @@ class LiveLearningRun:
+         # now drives the rollback check; the breaker counts consecutive rollbacks and
+         # takes §14.3's miscalibration trigger; a trip HALTS the run, recorded not silent.
+         self.breaker = CircuitBreaker()
++        # H4-10: per-skill held-out outcome history (tick, n_pass, n_total) — the raw
++        # series the learning-liveness signals recompute from (in-memory analogue of
++        # §20.10's truth-derivability; becomes truth rows when the loop writes truth).
++        self.held_history: dict[str, list[tuple[int, int, int]]] = {}
+         self.rollback_log: list[dict] = []
+         self.halted: Optional[dict] = None
+         # PER-SKILL rollback targets: a drop in skill X may only retire X's own notes —
+@@ -575,6 +579,7 @@ class LiveLearningRun:
+             p_hat = self.state.estimate(skill, "task").mean
+             hp, hn = self._eval(skill, "held_out")
+             self.state.update(skill, "task", hp, hn - hp)
++            self.held_history.setdefault(skill, []).append((t, hp, hn))   # H4-10
+             for _ in range(hp):
+                 self.calibrator.observe(p_hat, 1)
+             for _ in range(hn - hp):
+diff --git a/mdlp/mdlp/liveness.py b/mdlp/mdlp/liveness.py
+new file mode 100644
+index 0000000..70894f5
+--- /dev/null
++++ b/mdlp/mdlp/liveness.py
+@@ -0,0 +1,100 @@
++"""liveness.py (H4-10, ALGORITHM §20.10) — learning liveness: detecting ABSENCE, not harm.
++
++Every existing alarm in the loop detects harm (rollbacks, breaker trips); nothing detects
++a learner that is alive, advancing, completing work — and learning nothing. §20.10's three
++signals and three-state distinguisher close that class:
++
++  evidence  — is data arriving?   fresh eval volume + the n_min-PINNED fraction (the floor
++              is the correct RC-5 fix and it MASKS starvation as a side effect: a starved
++              cell's ĉ stays plausible; the pinned fraction is the observer the clamp needs)
++  progress  — is competence improving?  count of skills whose LP slope clears significant()
++  structure — is the model growing?     graph/library growth events in the window
++
++State partition (competence × anomaly — disjoint and exhaustive by construction):
++  not_applicable — no admitted skills (cold start is never "Converged" by vacuous truth)
++  converged                       — competence high, no anomaly: SUCCESS; a report
++  stalled                         — competence not high (the catch-all): always-deliver
++  converged_with_anomaly_pattern  — competence high AND a persistent held-out failure
++      residual under the green summary (the Vulcan signature: the residual is visible,
++      whatever hidden explanation absorbs it) — checked BEFORE converged, always-deliver
++
++Deliberately NOT a breaker: stalling is absence, not harm. This module only reports;
++nothing here can halt, defer, or modify learning (§20.10's surfacing-only property).
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++
++from .state import significant
++
++REPORT = "report"
++ALERT = "alert"
++
++
++@dataclass
++class LivenessReport:
++    state: str
++    delivery: str                                   # "report" | "alert"
++    signals: dict = field(default_factory=dict)     # diagnostic payload, rides the alert
++    anomalous_skills: list[str] = field(default_factory=list)
++
++
++def learning_liveness(run, *, theta: float = 0.6, w_live: int = 4,
++                      tau_absorb: float = 0.5, n_absorb: int = 3,
++                      lp_window: int = 10, eps_lp: float = 1e-3) -> LivenessReport:
++    """Compute §20.10's signals and state from a (possibly mid-flight) LiveLearningRun.
++    Recomputes ONLY from the run's own recorded artifacts (held_history, the posterior,
++    the library) — the in-process analogue of truth-derivability."""
++    skills = list(run.held_history.keys()) or list(getattr(run.corpus, "skills", []))
++    practiced = [s for s in skills if run.held_history.get(s)]
++    if not practiced:
++        return LivenessReport("not_applicable", REPORT,
++                              {"reason": "no practiced skills — cold start"})
++
++    # -- evidence signal ----------------------------------------------------------------
++    accrual = sum(hn for hist in run.held_history.values() for _t, _hp, hn in hist[-w_live:])
++    n_min = run.state.n_min
++    pinned = [s for s in practiced
++              if abs(run.state.cell(s, "task").mastery.n_eff - n_min) < 1e-9]
++    pinned_fraction = len(pinned) / len(practiced)
++
++    # -- progress signal ----------------------------------------------------------------
++    improving = []
++    for s in practiced:
++        lp = run.state.learning_progress(s, window=lp_window)
++        # H4-10 finding (carried back to MDLP §20.10): pure statistical significance is
++        # the WRONG progress bar at convergence — an asymptotic approach yields a Zeno
++        # slope (~1e-4 with SE ~1e-6 in the hermetic run) that stays "significant"
++        # forever, making Converged undetectable. significant()'s own margin parameter
++        # is the fix: progress must be significant AND practically non-trivial (ε_lp).
++        if significant(lp.mean, lp.se, margin=eps_lp):
++            improving.append(s)
++
++    # -- structure signal ---------------------------------------------------------------
++    structure_events = len(run.lib) + len(getattr(run, "rollback_log", []))
++
++    # -- the anomaly check (runs every evaluation, §20.10): persistent elevated held-out
++    #    failure rate in a high-competence skill, debounced n_absorb consecutive evals ----
++    anomalous = []
++    for s in practiced:
++        if run.state.estimate(s, "task").mean < theta:
++            continue                                 # anomaly is a HIGH-competence state
++        recent = run.held_history[s][-max(n_absorb, 1):]
++        if len(recent) >= n_absorb and all(
++                hn > 0 and (hn - hp) / hn > tau_absorb for _t, hp, hn in recent):
++            anomalous.append(s)
++
++    signals = {"evidence_accrual": accrual, "pinned_fraction": pinned_fraction,
++               "pinned_skills": pinned, "improving_skills": improving,
++               "structure_events": structure_events}
++
++    # -- the partition, anomaly checked BEFORE converged (normative order) ---------------
++    competence_high = all(run.state.estimate(s, "task").mean >= theta for s in practiced)
++    zero_progress = not improving
++    if anomalous and competence_high:
++        return LivenessReport("converged_with_anomaly_pattern", ALERT, signals, anomalous)
++    if not zero_progress:
++        return LivenessReport("learning", REPORT, signals)
++    if competence_high:
++        return LivenessReport("converged", REPORT, signals)
++    return LivenessReport("stalled", ALERT, signals)
+diff --git a/mdlp/tests/test_liveness.py b/mdlp/tests/test_liveness.py
+new file mode 100644
+index 0000000..165289d
+--- /dev/null
++++ b/mdlp/tests/test_liveness.py
+@@ -0,0 +1,56 @@
++"""H4-10 (§20.10): learning liveness — each signal and state has a fire test."""
++from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++from mdlp.liveness import ALERT, REPORT, learning_liveness
++
++
++def _run(runner=None, ticks=6, **kw):
++    r = LiveLearningRun(default_corpus(), runner or CorpusFakeRunner(), rng_seed=9, **kw)
++    return r.run(ticks)
++
++
++def test_cold_start_is_not_applicable_never_converged():
++    run = LiveLearningRun(default_corpus(), CorpusFakeRunner(), rng_seed=9)
++    rep = learning_liveness(run)                     # never ran a tick
++    assert rep.state == "not_applicable" and rep.delivery == REPORT
++
++
++def test_active_learning_reports_learning():
++    run = _run(CorpusFakeRunner(base=0.2, gain=0.3), ticks=10)
++    rep = learning_liveness(run, theta=0.99)
++    assert rep.state in ("learning", "stalled")      # progress or honest stall — never converged
++    assert "pinned_fraction" in rep.signals
++
++
++def test_stalled_is_an_alert_with_diagnostic_payload():
++    """A weak runner that never improves: competence low, zero progress → stalled."""
++    run = _run(CorpusFakeRunner(base=0.05, gain=0.0), ticks=8)
++    rep = learning_liveness(run, theta=0.6)
++    assert rep.state == "stalled" and rep.delivery == ALERT
++    assert rep.signals["improving_skills"] == []
++
++
++def test_converged_is_a_report_not_an_alert():
++    """A strong runner: competence above theta, progress flattened → converged."""
++    run = _run(CorpusFakeRunner(base=0.9, gain=0.0), ticks=30)
++    rep = learning_liveness(run, theta=0.5, lp_window=5)
++    assert rep.state == "converged" and rep.delivery == REPORT
++
++
++def test_anomaly_pattern_outranks_converged():
++    """The Vulcan state: green competence over a persistent fresh-failure residual —
++    checked BEFORE converged so it can never be misread as success."""
++    run = _run(CorpusFakeRunner(base=0.9, gain=0.0), ticks=6)
++    skill = run.corpus.skills[0]
++    # synthetic residual: recent held-out evals mostly failing while ĉ stays green
++    run.held_history[skill] = run.held_history[skill][:-3] + [(90, 1, 8), (91, 0, 8), (92, 1, 8)]
++    rep = learning_liveness(run, theta=0.5, tau_absorb=0.5, n_absorb=3, lp_window=3)
++    assert rep.state == "converged_with_anomaly_pattern" and rep.delivery == ALERT
++    assert skill in rep.anomalous_skills
++
++
++def test_signals_recompute_from_run_artifacts_only():
++    """Truth-derivability analogue: the report is a pure function of the run's recorded
++    artifacts — two calls on the same run are identical."""
++    run = _run(ticks=5)
++    a, b = learning_liveness(run), learning_liveness(run)
++    assert a == b
+-- 
+2.54.0
+

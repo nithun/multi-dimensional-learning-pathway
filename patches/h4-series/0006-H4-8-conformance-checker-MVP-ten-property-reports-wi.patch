@@ -1,7 +1,7 @@
 From 092f6fb06262ecf38013d17883d80ecaaf0c7a88 Mon Sep 17 00:00:00 2001
 From: Nithun <nithunram@gmail.com>
 Date: Wed, 19 Aug 2026 07:21:14 +0530
-Subject: [PATCH 6/6] =?UTF-8?q?H4-8:=20conformance=20checker=20MVP=20?=
+Subject: [PATCH 6/9] =?UTF-8?q?H4-8:=20conformance=20checker=20MVP=20?=
  =?UTF-8?q?=E2=80=94=20ten-property=20reports=20with=20honest=20statuses,?=
  =?UTF-8?q?=20truth=20predicates=20(seq-gapless,=20work-unit=20backing,=20?=
  =?UTF-8?q?held-out=20leak=20scan,=20split=20coverage,=20lineage=20acyclic?=
