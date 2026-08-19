@@ -1,7 +1,7 @@
 From 5a4fd874ee754ab74f2899a86a20a1cfb9663b55 Mon Sep 17 00:00:00 2001
 From: Nithun <nithunram@gmail.com>
 Date: Tue, 18 Aug 2026 21:27:58 +0530
-Subject: [PATCH 3/5] H4-7: add_skill docstring-fenced REBUILD-ONLY on the
+Subject: [PATCH 3/6] H4-7: add_skill docstring-fenced REBUILD-ONLY on the
  Protocol and both tiers, with docstring tests (the put() precedent)
 
 ---

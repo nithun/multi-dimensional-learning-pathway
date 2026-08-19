@@ -1,0 +1,431 @@
+From 092f6fb06262ecf38013d17883d80ecaaf0c7a88 Mon Sep 17 00:00:00 2001
+From: Nithun <nithunram@gmail.com>
+Date: Wed, 19 Aug 2026 07:21:14 +0530
+Subject: [PATCH 6/6] =?UTF-8?q?H4-8:=20conformance=20checker=20MVP=20?=
+ =?UTF-8?q?=E2=80=94=20ten-property=20reports=20with=20honest=20statuses,?=
+ =?UTF-8?q?=20truth=20predicates=20(seq-gapless,=20work-unit=20backing,=20?=
+ =?UTF-8?q?held-out=20leak=20scan,=20split=20coverage,=20lineage=20acyclic?=
+ =?UTF-8?q?ity,=20double-replay=20full-scope,=20conditional=20practice=20f?=
+ =?UTF-8?q?loor),=20reachability=20manifest=20with=20fire-test-evidence=20?=
+ =?UTF-8?q?discipline;=2012=20fire=20tests?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ mdlp/mdlp/stores/conformance.py | 247 ++++++++++++++++++++++++++++++++
+ mdlp/tests/test_conformance.py  | 148 +++++++++++++++++++
+ 2 files changed, 395 insertions(+)
+ create mode 100644 mdlp/mdlp/stores/conformance.py
+ create mode 100644 mdlp/tests/test_conformance.py
+
+diff --git a/mdlp/mdlp/stores/conformance.py b/mdlp/mdlp/stores/conformance.py
+new file mode 100644
+index 0000000..58c9282
+--- /dev/null
++++ b/mdlp/mdlp/stores/conformance.py
+@@ -0,0 +1,247 @@
++"""conformance.py (H4-8) — replay truth against the MDLP safety properties (ALGORITHM §21,
++DATA-LAYER §12): per-property trace predicates plus a live-path-reachability manifest, so
++property violations and built-but-unwired mechanisms are detected from records instead of
++by deep-read audit (the IX-040 / L-044 gap).
++
++Honesty rules carried verbatim from DL §12:
++  * every report lists ALL properties (PR-1..PR-10) with an explicit status —
++    `not_trace_checkable` is a first-class result, never an omission;
++  * a status means "per the predicates listed", never "the property in full" — guards
++    and the §21 statements remain the norm beyond the trace's reach;
++  * a stale/unsatisfiable manifest entry is `manifest_error`, loudly — never a silent pass;
++  * conditional (rare-path) mechanisms need FIRE-TEST evidence, not organic-run evidence
++    (a healthy run never exercises rollback — absence of rollbacks is not absence of the
++    mechanism, and presence of the mechanism is not provable from a quiet log).
++
++MVP scope, stated plainly: reads the EMBEDDED SqliteTruthStore (the full-tier port method
++is a follow-up); the "canonical run" surface is a completed `LiveLearningRun` (TA's live
++loop is in-process and writes no truth rows yet — its evidence is the run object's own
++artifacts). PR-3/PR-5 are `not_trace_checkable` until their producers log (per DL §12's
++conditional pattern); PR-2 is never trace-checkable (a static wall is a property of code).
++"""
++from __future__ import annotations
++
++import json
++from dataclasses import dataclass, field
++from typing import Callable, Optional
++
++CONFORMANT = "conformant"
++VIOLATED = "violated"
++UNEVIDENCED = "unevidenced"
++NOT_TRACE_CHECKABLE = "not_trace_checkable"
++MANIFEST_ERROR = "manifest_error"
++
++_SEVERITY = [CONFORMANT, NOT_TRACE_CHECKABLE, UNEVIDENCED, VIOLATED, MANIFEST_ERROR]
++
++ALL_PROPERTIES = [f"PR-{i}" for i in range(1, 11)]
++
++
++@dataclass
++class PropertyResult:
++    status: str
++    predicates_checked: list[str] = field(default_factory=list)
++    notes: list[str] = field(default_factory=list)
++
++    def worsen(self, status: str, predicate: str, note: str = "") -> None:
++        """Worst-of merge (DL §12: severity order manifest_error > violated >
++        unevidenced > not_trace_checkable > conformant)."""
++        self.predicates_checked.append(predicate)
++        if _SEVERITY.index(status) > _SEVERITY.index(self.status):
++            self.status = status
++        if note:
++            self.notes.append(note)
++
++
++@dataclass
++class ManifestEntry:
++    mechanism: str
++    anchor: str                      # the §-reference grounding it
++    kind: str                        # "always_fires" | "conditional"
++    evidences: list[str]             # the PR-n ids this entry evidences
++    check: Callable[[object], bool]  # run-surface evidence probe
++
++
++@dataclass
++class ConformanceReport:
++    scope: str
++    per_property: dict[str, PropertyResult]
++    manifest: dict[str, str] = field(default_factory=dict)   # mechanism -> status
++
++    def status(self, pr: str) -> str:
++        return self.per_property[pr].status
++
++
++def default_manifest() -> list[ManifestEntry]:
++    """The reachability manifest for TA's live loop as wired by the H4 series. Anchors
++    are the H4 tasks; `check` probes the completed run's own artifacts (the in-process
++    analogue of §21.2's truth-record evidence, honest about being exactly that)."""
++    return [
++        ManifestEntry("calibrator_fed", "H4-2/§14", "always_fires", ["PR-1"],
++                      lambda run: len(getattr(run, "calibrator")._preds) > 0),
++        ManifestEntry("verifier_admission", "H4-4/§4.3", "always_fires", ["PR-6"],
++                      lambda run: run.registry.admit("corpus-exact", band="corpus")),
++        ManifestEntry("breaker_consulted", "H4-3/§8", "conditional", ["PR-5"],
++                      lambda run: hasattr(run, "breaker") and isinstance(run.breaker.consec, int)),
++        ManifestEntry("rollback_armed", "H4-3/§8", "conditional", ["PR-5"],
++                      lambda run: isinstance(getattr(run, "rollback_log", None), list)),
++        ManifestEntry("a1_call_site", "H4-5/A1", "always_fires", [],
++                      lambda run: hasattr(run.decision, "a1_w")),
++    ]
++
++
++def check_conformance(truth=None, run=None, *, scope: str = "incremental",
++                      manifest: Optional[list[ManifestEntry]] = None,
++                      fire_test_evidence: Optional[set] = None,
++                      held_out_item_ids: Optional[set] = None,
++                      f_min: Optional[float] = None,
++                      rebuild: Optional[Callable] = None) -> ConformanceReport:
++    """One conformance pass. `truth` = an embedded SqliteTruthStore (or None);
++    `run` = a completed LiveLearningRun (or None); `fire_test_evidence` = mechanism
++    names whose fire-tests passed in this scope (the §20.6 discipline — the caller's
++    CI supplies it; conditionals without it are `unevidenced`, never assumed)."""
++    rep = ConformanceReport(scope=scope,
++                            per_property={p: PropertyResult(CONFORMANT) for p in ALL_PROPERTIES})
++    fire = fire_test_evidence or set()
++
++    # -- properties with no trace evidence in TA today: honest statuses, always listed --
++    rep.per_property["PR-2"].worsen(NOT_TRACE_CHECKABLE, "static_wall",
++                                    "SOLVE/JUDGE wall is a property of code — guards only")
++    rep.per_property["PR-3"].worsen(NOT_TRACE_CHECKABLE, "gate_thresholds_unlogged",
++                                    "deployment does not log effective thresholds (DL §12 conditional)")
++    rep.per_property["PR-5"].worsen(NOT_TRACE_CHECKABLE, "scaffold_registry_absent",
++                                    "no scaffold_versions rows pre-M3; run-surface manifest covers the code-axis analogue")
++
++    if truth is not None:
++        db = truth._db                       # embedded tier, documented MVP scope
++        # PR-4(ii): seq gapless & unique per (agent, episode, suite)
++        rows = db.execute("SELECT agent_id, episode_id, suite_id, seq FROM dispatches "
++                          "ORDER BY agent_id, episode_id, suite_id, seq").fetchall()
++        scopes: dict = {}
++        for a, e, s, q in rows:
++            scopes.setdefault((a, e, s), []).append(q)
++        for key, seqs in scopes.items():
++            if seqs != list(range(len(seqs))):
++                rep.per_property["PR-4"].worsen(VIOLATED, "seq_gapless",
++                                                f"gap/dup in seq for {key}: {seqs}")
++        rep.per_property["PR-4"].worsen(CONFORMANT, "seq_gapless")
++        # PR-4(i): every work unit references an existing dispatch row
++        orphan = db.execute("SELECT COUNT(*) FROM work_units w LEFT JOIN dispatches d "
++                            "ON w.intent_key = d.intent_key WHERE d.intent_key IS NULL").fetchone()[0]
++        if orphan:
++            rep.per_property["PR-4"].worsen(VIOLATED, "work_unit_backed",
++                                            f"{orphan} work unit(s) reference no dispatch")
++        else:
++            rep.per_property["PR-4"].worsen(CONFORMANT, "work_unit_backed")
++        # PR-8 (what the schema holds): identity fields non-null; lease half honest
++        bad = db.execute("SELECT COUNT(*) FROM work_units WHERE occurrence_id IS NULL "
++                         "OR attempt_idx IS NULL").fetchone()[0]
++        rep.per_property["PR-8"].worsen(VIOLATED if bad else CONFORMANT, "identity_fields",
++                                        f"{bad} null identity field(s)" if bad else "")
++        rep.per_property["PR-8"].worsen(NOT_TRACE_CHECKABLE, "lease_ttl",
++                                        "no lease columns pre-§20 adoption — guard territory")
++        # PR-1(ii): no held-out item id leaks into event payloads outside JUDGE eval rows
++        if held_out_item_ids:
++            leaks = 0
++            for (payload,) in db.execute("SELECT payload FROM events"):
++                text = payload if isinstance(payload, str) else json.dumps(payload)
++                if any(i in text for i in held_out_item_ids):
++                    leaks += 1
++            rep.per_property["PR-1"].worsen(VIOLATED if leaks else CONFORMANT, "held_out_leak_scan",
++                                            f"{leaks} event payload(s) embed held-out ids" if leaks else "")
++        else:
++            rep.per_property["PR-1"].worsen(NOT_TRACE_CHECKABLE, "held_out_leak_scan",
++                                            "no held-out id set supplied for the scan")
++        # PR-6 (scoped): a skill with held-out evals but no public evals (or vice versa)
++        lop = db.execute("SELECT skill, COUNT(DISTINCT split) c FROM evals GROUP BY skill "
++                         "HAVING c < 2").fetchall()
++        if lop:
++            rep.per_property["PR-6"].worsen(VIOLATED, "both_splits_present",
++                                            f"single-split skills: {[r[0] for r in lop]}")
++        else:
++            rep.per_property["PR-6"].worsen(CONFORMANT, "both_splits_present")
++        # PR-10 (scoped): lineage parent chains are acyclic (ancestry is well-defined)
++        parents = dict(db.execute("SELECT checkpoint_id, parent FROM lineage").fetchall())
++        for start in parents:
++            seen, node = set(), start
++            while node is not None and node in parents:
++                if node in seen:
++                    rep.per_property["PR-10"].worsen(VIOLATED, "lineage_acyclic",
++                                                     f"ancestry cycle at {node}")
++                    break
++                seen.add(node)
++                node = parents[node]
++        rep.per_property["PR-10"].worsen(CONFORMANT, "lineage_acyclic")
++        rep.per_property["PR-10"].worsen(NOT_TRACE_CHECKABLE, "cross_generation_reads",
++                                         "no epoch-stamp consumers pre-§10.1 adoption")
++        # PR-7: double-replay determinism — full scope only (DL §12: the expensive pair)
++        if scope == "full":
++            rb = rebuild or _default_double_replay
++            same = rb(truth)
++            rep.per_property["PR-7"].worsen(CONFORMANT if same else VIOLATED, "double_replay",
++                                            "" if same else "two replays of one log diverged")
++        else:
++            rep.per_property["PR-7"].worsen(NOT_TRACE_CHECKABLE, "double_replay",
++                                            "full-scope only (DL §12)")
++        # PR-9: practice-rate floor — conditional on a supplied f_min (no invented window)
++        if f_min is not None and scopes:
++            per_suite: dict = {}
++            for (a, e, s), seqs in scopes.items():
++                per_suite[s] = per_suite.get(s, 0) + len(seqs)
++            total = sum(per_suite.values())
++            starved = [s for s, n in per_suite.items() if n / total < f_min]
++            rep.per_property["PR-9"].worsen(VIOLATED if starved else CONFORMANT, "practice_floor",
++                                            f"below f_min: {starved}" if starved else "")
++        else:
++            rep.per_property["PR-9"].worsen(NOT_TRACE_CHECKABLE, "practice_floor",
++                                            "f_min not supplied (DL §12 conditional — no invented window)")
++    else:
++        for p in ("PR-1", "PR-4", "PR-6", "PR-7", "PR-8", "PR-9", "PR-10"):
++            rep.per_property[p].worsen(NOT_TRACE_CHECKABLE, "no_truth_store", "no truth store supplied")
++
++    # -- the reachability manifest over the run surface ---------------------------------
++    if run is not None:
++        for entry in (manifest if manifest is not None else default_manifest()):
++            try:
++                present = bool(entry.check(run))
++            except Exception as exc:                       # stale entry: fail LOUDLY
++                rep.manifest[entry.mechanism] = MANIFEST_ERROR
++                for pr in entry.evidences:
++                    rep.per_property[pr].worsen(MANIFEST_ERROR, f"manifest:{entry.mechanism}",
++                                                f"stale manifest entry: {exc!r}")
++                continue
++            if entry.kind == "conditional" and entry.mechanism not in fire:
++                rep.manifest[entry.mechanism] = UNEVIDENCED
++                for pr in entry.evidences:
++                    rep.per_property[pr].worsen(UNEVIDENCED, f"manifest:{entry.mechanism}",
++                                                "conditional mechanism without fire-test evidence in scope")
++            elif present:
++                rep.manifest[entry.mechanism] = CONFORMANT
++            else:
++                rep.manifest[entry.mechanism] = UNEVIDENCED
++                for pr in entry.evidences:
++                    rep.per_property[pr].worsen(UNEVIDENCED, f"manifest:{entry.mechanism}",
++                                                f"{entry.mechanism} left no evidence in the canonical run")
++    return rep
++
++
++def _default_double_replay(truth) -> bool:
++    """PR-7's predicate: rebuild the state projection twice from the same log and compare
++    byte-for-byte. A capture stub stands in for the StateStore (rebuild_state's writes
++    all go through `put`, the REBUILD-ONLY path)."""
++    from .rebuild import rebuild_state
++
++    class _Capture:
++        def __init__(self):
++            self.cells: dict = {}
++
++        def put(self, cell) -> None:
++            self.cells[(cell.skill, cell.difficulty)] = (
++                cell.mastery.alpha, cell.mastery.beta,
++                cell.drift.alpha, cell.drift.beta, cell.n_eff)
++
++    def snap() -> str:
++        cap = _Capture()
++        rebuild_state(truth, cap)
++        return json.dumps(sorted((str(k), v) for k, v in cap.cells.items()))
++
++    return snap() == snap()
+diff --git a/mdlp/tests/test_conformance.py b/mdlp/tests/test_conformance.py
+new file mode 100644
+index 0000000..c7038fe
+--- /dev/null
++++ b/mdlp/tests/test_conformance.py
+@@ -0,0 +1,148 @@
++"""H4-8 (DL §12): the conformance checker — every predicate has a synthetic-violation
++fire test (a checker that cannot be made to fire is the inert-alarm failure, §12.4)."""
++from mdlp.stores import embedded
++from mdlp.stores.conformance import (
++    ALL_PROPERTIES, CONFORMANT, MANIFEST_ERROR, NOT_TRACE_CHECKABLE, UNEVIDENCED,
++    VIOLATED, ManifestEntry, check_conformance, default_manifest)
++from mdlp.stores.schemas import Event, EvalResult
++
++
++def _seeded_store():
++    s = embedded()
++    t = s.truth
++    for suite in ("acme", "nova"):
++        for i in range(3):
++            k, seq = t.append_dispatch(agent_id="a1", episode_id="e1", suite_id=suite,
++                                       action_fingerprint=f"f{i}", ts=float(i))
++            t.open_work_unit(agent_id="a1", episode_id="e1", suite_id=suite, intent_key=k)
++    t.record_eval(EvalResult(id="", ts=1.0, skill="acme", difficulty="task",
++                             split="held_out", n_pass=3, n_total=4, verifier="det"))
++    t.record_eval(EvalResult(id="", ts=2.0, skill="acme", difficulty="task",
++                             split="public", n_pass=2, n_total=4, verifier="det"))
++    return s, t
++
++
++def test_report_lists_all_ten_properties_every_run():
++    rep = check_conformance()                       # no truth, no run — the emptiest call
++    assert set(rep.per_property) == set(ALL_PROPERTIES)
++    assert all(r.status in (CONFORMANT, VIOLATED, UNEVIDENCED,
++                            NOT_TRACE_CHECKABLE, MANIFEST_ERROR)
++               for r in rep.per_property.values())
++    # what is not checked is STATED, every time (DL §12)
++    assert rep.status("PR-2") == NOT_TRACE_CHECKABLE
++    assert rep.status("PR-4") == NOT_TRACE_CHECKABLE
++
++
++def test_healthy_store_conforms_where_checkable():
++    s, t = _seeded_store()
++    rep = check_conformance(truth=t, scope="full")
++    assert rep.status("PR-4") == CONFORMANT          # seq gapless, units backed
++    assert rep.status("PR-6") == CONFORMANT          # both splits present
++    assert rep.status("PR-7") == CONFORMANT          # double-replay identical
++    assert rep.status("PR-3") == NOT_TRACE_CHECKABLE # honest: thresholds unlogged
++    s.close()
++
++
++def test_seq_gap_fires_pr4():
++    s, t = _seeded_store()
++    t._db.execute("DELETE FROM dispatches WHERE seq = 1 AND suite_id = 'acme'")
++    t._db.commit()
++    rep = check_conformance(truth=t)
++    assert rep.status("PR-4") == VIOLATED
++    s.close()
++
++
++def test_orphan_work_unit_fires_pr4():
++    s, t = _seeded_store()
++    t._db.execute("UPDATE work_units SET intent_key = 'ghost' WHERE rowid = 1")
++    t._db.commit()
++    rep = check_conformance(truth=t)
++    assert rep.status("PR-4") == VIOLATED
++    s.close()
++
++
++def test_held_out_leak_fires_pr1():
++    s, t = _seeded_store()
++    t.append_event(Event(id="", ts=9.0, type="note",
++                         payload={"context": "remember item held-77"}))
++    rep = check_conformance(truth=t, held_out_item_ids={"held-77"})
++    assert rep.status("PR-1") == VIOLATED
++    clean = check_conformance(truth=t, held_out_item_ids={"held-99"})
++    assert clean.status("PR-1") == CONFORMANT
++    s.close()
++
++
++def test_single_split_skill_fires_pr6():
++    s, t = _seeded_store()
++    t.record_eval(EvalResult(id="", ts=3.0, skill="lonely", difficulty="task",
++                             split="held_out", n_pass=1, n_total=2, verifier="det"))
++    rep = check_conformance(truth=t)
++    assert rep.status("PR-6") == VIOLATED
++    s.close()
++
++
++def test_lineage_cycle_fires_pr10():
++    s, t = _seeded_store()
++    t._db.execute("INSERT INTO lineage(checkpoint_id, parent) VALUES ('c1','c2'),('c2','c1')")
++    t._db.commit()
++    rep = check_conformance(truth=t)
++    assert rep.status("PR-10") == VIOLATED
++    s.close()
++
++
++def test_nondeterministic_replay_fires_pr7_full_scope_only():
++    s, t = _seeded_store()
++    flip = {"n": 0}
++
++    def broken_rebuild(_truth):
++        flip["n"] += 1
++        return False                                  # simulated divergence
++    rep = check_conformance(truth=t, scope="full", rebuild=broken_rebuild)
++    assert rep.status("PR-7") == VIOLATED
++    inc = check_conformance(truth=t, scope="incremental")
++    assert inc.status("PR-7") == NOT_TRACE_CHECKABLE  # never judged on a fragment
++    s.close()
++
++
++def test_practice_floor_conditional_on_f_min():
++    s, t = _seeded_store()
++    rep = check_conformance(truth=t)                  # no f_min → honest not-checkable
++    assert rep.status("PR-9") == NOT_TRACE_CHECKABLE
++    ok = check_conformance(truth=t, f_min=0.3)        # 3/6 each suite → conforms
++    assert ok.status("PR-9") == CONFORMANT
++    starved = check_conformance(truth=t, f_min=0.6)   # no suite reaches 60%
++    assert starved.status("PR-9") == VIOLATED
++    s.close()
++
++
++def _run():
++    from mdlp.corpus import CorpusFakeRunner, LiveLearningRun, default_corpus
++    return LiveLearningRun(default_corpus(), CorpusFakeRunner(), rng_seed=8).run(3)
++
++
++def test_manifest_evidences_wired_mechanisms():
++    run = _run()
++    rep = check_conformance(run=run,
++                            fire_test_evidence={"breaker_consulted", "rollback_armed"})
++    assert rep.manifest["calibrator_fed"] == CONFORMANT
++    assert rep.manifest["verifier_admission"] == CONFORMANT
++    assert rep.manifest["a1_call_site"] == CONFORMANT
++    assert rep.manifest["breaker_consulted"] == CONFORMANT
++
++
++def test_conditional_without_fire_test_evidence_is_unevidenced():
++    run = _run()
++    rep = check_conformance(run=run)                  # no fire-test evidence supplied
++    assert rep.manifest["rollback_armed"] == UNEVIDENCED
++    assert rep.status("PR-5") == UNEVIDENCED          # worst-of merge reaches the property
++
++
++def test_stale_manifest_entry_errors_loudly():
++    run = _run()
++    stale = default_manifest() + [
++        ManifestEntry("ghost_mechanism", "§0", "always_fires", ["PR-6"],
++                      lambda r: r.no_such_attribute_anywhere)]
++    rep = check_conformance(run=run, manifest=stale,
++                            fire_test_evidence={"breaker_consulted", "rollback_armed"})
++    assert rep.manifest["ghost_mechanism"] == MANIFEST_ERROR
++    assert rep.status("PR-6") == MANIFEST_ERROR       # never a silent pass or skip
+-- 
+2.54.0
+

@@ -1,7 +1,7 @@
 From fd8b8ce2a8834d5bea7407329fd3a12b5ae84531 Mon Sep 17 00:00:00 2001
 From: Nithun <nithunram@gmail.com>
 Date: Tue, 18 Aug 2026 21:26:06 +0530
-Subject: [PATCH 2/5] H4-3: rollback+breaker+drift wired onto the live tick;
+Subject: [PATCH 2/6] H4-3: rollback+breaker+drift wired onto the live tick;
  per-skill rollback targeting; miscalibration trigger plumbed, disarmed with
  in-code rationale
 
