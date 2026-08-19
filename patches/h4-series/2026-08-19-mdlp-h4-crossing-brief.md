@@ -11,6 +11,7 @@
 1. **The H4 patch series** — 9 patches, `git am`-ready, base `d9e78ac` (your `build` at audit time). Built and test-verified in an isolated clone: your `mdlp/tests` suite green **plus 48 new tests**, and your repo-root `tests/` suite (102 files) verified unbroken. Full per-patch detail and apply commands: `README.md` beside this brief.
 2. **The 2026-08-13 MDLP spec wave** (zero trace here pre-crossing): ALGORITHM now §1–§21 (incl. §10.1 epoch discipline, §20.10 learning liveness, §21 safety properties PR-1..PR-10), DATA-LAYER incl. §6.3 constraint table and §12 conformance checker, plus `IMPL-PROTOCOL.md` (a pre-registered implementability study). File these under `docs/mdlp/` and update `LINKAGE.md`.
 3. **`AUDIT-TA-2026-08.md` + `HANDOVER-v4.md`** — the evidence base and the task list this series executed. HANDOVER-v4 supersedes v3; note v3 §1 is known-stale on one A5 claim (see §5 below).
+4. **The Rox study + its TA brief** (added 2026-08-19, same crossing): `STUDY-rox-agent-swarm.md` (research side — first commercial production swarm studied; landscape claim now 4-for-4 by vendor self-admission) and `2026-08-19-rox-study-ta-brief.md` beside this file — the TA cut, mapping Rox's engineering patterns onto your G-map/WBS (mostly G5/W4 autonomy shapes, one warning against orchestration growth). Independent of the patches; read its own do-not list.
 
 ## 2. Mapping onto YOUR ledger (WBS / board / lessons)
 
